@@ -994,6 +994,22 @@
   .empty-plans{ padding:28px 20px; text-align:center; color:var(--text-dim); font-size:14px; line-height:1.5; }
   .empty-plans .big{ color:var(--text); font-size:18px; font-weight:700; margin-bottom:6px; }
   .empty-plans b{ color:var(--text); }
+
+  .weight-field{ position:relative; min-width:0; }
+  .weight-field input{ padding-right:44px !important; }
+  .unit-btn{
+    position:absolute; top:4px; right:4px; bottom:4px;
+    width:38px;
+    border:none; border-radius:var(--radius-s);
+    background:var(--bg);
+    color:var(--text-dim);
+    font-size:11px; font-weight:700; letter-spacing:0.3px;
+    padding:0;
+    transition:transform 140ms var(--ease-out), color 140ms var(--ease-out), background 140ms var(--ease-out);
+  }
+  .unit-btn:active{ transform:scale(0.9); }
+
+  .set-row.done .unit-btn{ opacity:0.6; }
 </style>
 </head>
 <body>
@@ -1454,13 +1470,29 @@
     return list;
   }
 
+  /* Weight unit per exercise. The last unit you picked for an exercise
+     becomes its default on future days. */
+  var LB_TO_KG = 0.45359237;
+  function unitPrefs(){ return readJSON(cacheNs + "units", {}); }
+  function preferredUnit(key){ return unitPrefs()[key] === "lbs" ? "lbs" : "kg"; }
+  function rememberUnit(key, unit){
+    var prefs = unitPrefs();
+    prefs[key] = unit;
+    writeJSON(cacheNs + "units", prefs);
+  }
+  function convertWeight(w, from, to){
+    if(from === to) return w;
+    return from === "lbs" ? w * LB_TO_KG : w / LB_TO_KG;
+  }
+  function roundWeight(w){ return Math.round(w * 10) / 10; }
+
   function defaultLog(dateStr, dow, p){
     var exercises = {};
     p.exercises.forEach(function(ex){
       var sets = [];
       var n = Math.max(1, parseInt(ex.sets, 10) || 1);
       for(var i=0;i<n;i++){ sets.push({weight:"", reps:"", done:false}); }
-      exercises[ex.key] = { sets: sets };
+      exercises[ex.key] = { unit: preferredUnit(ex.key), sets: sets };
     });
     var cardio = {};
     p.cardio.forEach(function(c){ cardio[c.key] = { value:"", done:false }; });
@@ -1473,6 +1505,9 @@
     Object.keys(base.exercises).forEach(function(k){
       var savedEx = saved.exercises && saved.exercises[k];
       if(savedEx && Array.isArray(savedEx.sets)){
+        var anyWeight = savedEx.sets.some(function(x){ return x && x.weight !== "" && x.weight != null; });
+        /* Logs from before units existed were always kg. */
+        base.exercises[k].unit = savedEx.unit || (anyWeight ? "kg" : base.exercises[k].unit);
         base.exercises[k].sets.forEach(function(s, i){
           var sv = savedEx.sets[i];
           if(sv){
@@ -1621,7 +1656,10 @@
         log.sets.forEach(function(s, i){
           html += '<div class="set-row' + (s.done ? ' done' : '') + '">';
           html += '<div class="idx">' + (i+1) + '</div>';
-          html += '<input type="number" inputmode="decimal" placeholder="kg" value="' + esc(s.weight) + '" data-set-input data-key="' + ex.key + '" data-index="' + i + '" data-field="weight" ' + (s.done ? 'disabled' : '') + ' />';
+          html += '<div class="weight-field">';
+          html += '<input type="number" inputmode="decimal" placeholder="0" aria-label="Weight in ' + log.unit + '" value="' + esc(s.weight) + '" data-set-input data-key="' + ex.key + '" data-index="' + i + '" data-field="weight" ' + (s.done ? 'disabled' : '') + ' />';
+          html += '<button type="button" class="unit-btn' + (log.unit === "lbs" ? ' lbs' : '') + '" data-unit-toggle="' + ex.key + '" aria-label="Weight unit: ' + log.unit + '. Tap to switch.">' + log.unit + '</button>';
+          html += '</div>';
           html += '<input type="number" inputmode="numeric" placeholder="' + esc(ex.reps) + '" value="' + esc(s.reps) + '" data-set-input data-key="' + ex.key + '" data-index="' + i + '" data-field="reps" ' + (s.done ? 'disabled' : '') + ' />';
           html += '<button class="check-btn' + (s.done ? ' on' : '') + '" data-set-done data-key="' + ex.key + '" data-index="' + i + '" data-rest="' + ex.rest + '" data-name="' + esc(ex.name) + '">&#10003;</button>';
           html += '</div>';
@@ -1674,6 +1712,10 @@
     return sec + "s";
   }
 
+  content.addEventListener("mousedown", function(e){
+    if(e.target.closest("[data-unit-toggle]")) e.preventDefault();
+  });
+
   content.addEventListener("keydown", function(e){
     var head = e.target.closest && e.target.closest("[data-toggle-ex]");
     if(head && (e.key === "Enter" || e.key === " ")){
@@ -1697,6 +1739,24 @@
   });
 
   content.addEventListener("click", function(e){
+    var unitBtn = e.target.closest("[data-unit-toggle]");
+    if(unitBtn){
+      e.preventDefault();
+      var uk = unitBtn.dataset.unitToggle;
+      var exLog = currentLog.exercises[uk];
+      exLog.unit = exLog.unit === "lbs" ? "kg" : "lbs";
+      rememberUnit(uk, exLog.unit);
+      content.querySelectorAll('[data-unit-toggle="' + uk + '"]').forEach(function(b){
+        b.textContent = exLog.unit;
+        b.classList.toggle("lbs", exLog.unit === "lbs");
+        b.setAttribute("aria-label", "Weight unit: " + exLog.unit + ". Tap to switch.");
+      });
+      content.querySelectorAll('[data-set-input][data-key="' + uk + '"][data-field="weight"]').forEach(function(inp){
+        inp.setAttribute("aria-label", "Weight in " + exLog.unit);
+      });
+      scheduleSave();
+      return;
+    }
     var doneBtn = e.target.closest("[data-set-done]");
     if(doneBtn){
       var key = doneBtn.dataset.key, index = doneBtn.dataset.index;
@@ -1772,23 +1832,29 @@
   async function loadProgressData(){
     var docs = await store.queryRecent(30);
     var asc = docs.filter(Boolean).slice().sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
-    var points = [];
+    var entries = [];
     asc.forEach(function(d){
       var ex = d.exercises && d.exercises[selectedProgressKey];
       if(ex && Array.isArray(ex.sets)){
+        var unit = ex.unit === "lbs" ? "lbs" : "kg";
         var max = 0, repsAtMax = "";
         ex.sets.forEach(function(s){
           var w = parseFloat(s.weight);
           if(!isNaN(w) && w > max){ max = w; repsAtMax = s.reps; }
         });
-        if(max > 0) points.push({ date: d.date, weight: max, reps: repsAtMax });
+        if(max > 0) entries.push({ date: d.date, raw: max, unit: unit, reps: repsAtMax });
       }
     });
-    renderChart(points);
+    /* Chart everything in the unit you used most recently for this exercise. */
+    var displayUnit = entries.length ? entries[entries.length-1].unit : preferredUnit(selectedProgressKey);
+    var points = entries.map(function(e){
+      return { date: e.date, weight: roundWeight(convertWeight(e.raw, e.unit, displayUnit)), raw: e.raw, unit: e.unit, reps: e.reps };
+    });
+    renderChart(points, displayUnit);
     renderHistoryList(points);
   }
 
-  function renderChart(points){
+  function renderChart(points, unit){
     var el = document.getElementById("chart-card");
     if(!el) return;
     if(points.length < 2){
@@ -1812,7 +1878,7 @@
     svg += dots;
     svg += '</svg>';
     svg += '<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:var(--text-faint)">';
-    svg += '<span>' + min + ' kg</span><span>' + max + ' kg</span></div>';
+    svg += '<span>' + roundWeight(min) + ' ' + unit + '</span><span>' + roundWeight(max) + ' ' + unit + '</span></div>';
     el.innerHTML = svg;
   }
 
@@ -1822,7 +1888,7 @@
     if(!points.length){ el.innerHTML = ""; return; }
     var rev = points.slice().reverse();
     el.innerHTML = '<div class="card">' + rev.map(function(p){
-      return '<div class="history-row"><span class="hdate">' + formatShort(p.date) + '</span><span class="hval">' + p.weight + ' kg &times; ' + esc(p.reps || "?") + '</span></div>';
+      return '<div class="history-row"><span class="hdate">' + formatShort(p.date) + '</span><span class="hval">' + roundWeight(p.raw) + ' ' + p.unit + ' &times; ' + esc(p.reps || "?") + '</span></div>';
     }).join("") + '</div>';
   }
 
