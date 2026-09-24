@@ -990,6 +990,10 @@
   @media (prefers-reduced-motion: reduce){
     .save-bar, .sheet, .sheet-backdrop, .toast{ transition:none; }
   }
+
+  .empty-plans{ padding:28px 20px; text-align:center; color:var(--text-dim); font-size:14px; line-height:1.5; }
+  .empty-plans .big{ color:var(--text); font-size:18px; font-weight:700; margin-bottom:6px; }
+  .empty-plans b{ color:var(--text); }
 </style>
 </head>
 <body>
@@ -1086,58 +1090,6 @@
   "use strict";
 
   /* ---------------- Plan data ---------------- */
-  /* Built-in starter plan: used to seed your first plan profile. */
-  var DEFAULT_DAYS = {
-    1: { title:"Legs", exercises:[
-      {key:"back-squat", name:"Barbell Back Squat", sets:4, reps:"6-8", rest:150},
-      {key:"rdl", name:"Romanian Deadlift", sets:4, reps:"8-10", rest:90},
-      {key:"leg-press", name:"Leg Press", sets:4, reps:"10-12", rest:90},
-      {key:"walking-lunges", name:"Walking Lunges", sets:4, reps:"10/leg", rest:60},
-      {key:"leg-curl", name:"Leg Curl", sets:4, reps:"12-15", rest:60},
-      {key:"calf-raise", name:"Standing Calf Raise", sets:4, reps:"15", rest:45}
-    ], cardio:[
-      {key:"incline-walk-mon", name:"Incline Walk", kind:"duration", target:"20–30 min"}
-    ]},
-    2: { title:"Push + Triceps Finisher", exercises:[
-      {key:"bench-press", name:"Barbell Bench Press", sets:4, reps:"6-8", rest:150},
-      {key:"ohp", name:"Overhead Press", sets:4, reps:"8-10", rest:90},
-      {key:"incline-db-press", name:"Incline Dumbbell Press", sets:4, reps:"10-12", rest:90},
-      {key:"lateral-raise", name:"Lateral Raise", sets:4, reps:"12-15", rest:60},
-      {key:"cable-fly", name:"Cable Chest Fly", sets:4, reps:"12-15", rest:45},
-      {key:"close-grip-bench", name:"Close-Grip Bench / Dips", sets:4, reps:"8-10", rest:90},
-      {key:"ohe-triceps", name:"Overhead Triceps Extension", sets:4, reps:"10-12", rest:60},
-      {key:"triceps-pushdown", name:"Triceps Pushdown", sets:4, reps:"12-15", rest:45}
-    ], cardio:[
-      {key:"incline-walk-tue", name:"Incline Walk", kind:"duration", target:"20–30 min"}
-    ]},
-    3: { title:"Padel + Light Pull/Upper", exercises:[
-      {key:"lat-pulldown", name:"Lat Pulldown", sets:4, reps:"10-12", rest:90},
-      {key:"seated-row", name:"Seated Cable Row", sets:4, reps:"10-12", rest:90},
-      {key:"face-pull", name:"Face Pull", sets:4, reps:"15", rest:60},
-      {key:"db-curl", name:"Dumbbell Bicep Curl", sets:4, reps:"12-15", rest:45},
-      {key:"hammer-curl-wed", name:"Hammer Curl", sets:4, reps:"12-15", rest:45}
-    ], cardio:[
-      {key:"padel", name:"Padel", kind:"done", target:"Match / session"}
-    ]},
-    4: { title:"Pull + Biceps Finisher + Easy Run", exercises:[
-      {key:"deadlift-row", name:"Deadlift or Barbell Row", sets:4, reps:"6-8", rest:150},
-      {key:"pullup", name:"Weighted Pull-up / Lat Pulldown", sets:4, reps:"8-10", rest:90},
-      {key:"one-arm-row", name:"One-arm Dumbbell Row", sets:4, reps:"10-12", rest:90},
-      {key:"rear-delt-fly", name:"Rear Delt Fly", sets:4, reps:"12-15", rest:60},
-      {key:"barbell-curl", name:"Barbell / EZ-Bar Curl", sets:4, reps:"8-10", rest:60},
-      {key:"incline-curl", name:"Incline Dumbbell Curl", sets:4, reps:"10-12", rest:45},
-      {key:"rope-hammer-curl", name:"Cable/Rope Hammer Curl", sets:4, reps:"12-15", rest:45}
-    ], cardio:[
-      {key:"easy-run", name:"Easy Run", kind:"distance", target:"3–4 km"}
-    ]},
-    5: { title:"Swim", exercises:[], cardio:[
-      {key:"swim", name:"Swim", kind:"duration", target:"Technique / endurance"}
-    ]},
-    6: { title:"Long Run", exercises:[], cardio:[
-      {key:"long-run", name:"Long Run", kind:"distance", target:"Build to 10k"}
-    ]},
-    0: { title:"Rest", exercises:[], cardio:[] }
-  };
 
   var WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
@@ -1475,7 +1427,7 @@
   }
   function activeDays(){
     var p = activePlan();
-    return p ? p.data.days : DEFAULT_DAYS;
+    return p ? p.data.days : {};
   }
   function emptyDay(){ return { title:"", exercises:[], cardio:[] }; }
   function normaliseDay(d){
@@ -1491,7 +1443,7 @@
   function allExercises(){
     var seen = {}, list = [];
     var ordered = plans.slice().sort(function(a,b){ return (b.id === activePlanId) - (a.id === activePlanId); });
-    var sources = ordered.length ? ordered.map(function(p){ return p.data.days; }) : [DEFAULT_DAYS];
+    var sources = ordered.map(function(p){ return p.data.days; });
     sources.forEach(function(days){
       [1,2,3,4,5,6,0].forEach(function(d){
         normaliseDay(days[d]).exercises.forEach(function(ex){
@@ -1577,7 +1529,7 @@
   function renderHeader(){
     weekdayLabel.textContent = WEEKDAY_NAMES[currentDow] + ", " + formatShort(currentDate);
     var hasContent = currentDayPlan.exercises.length || currentDayPlan.cardio.length;
-    planTitleLabel.textContent = currentDayPlan.title || (hasContent ? "Workout" : "Rest");
+    planTitleLabel.textContent = currentDayPlan.title || (hasContent ? "Workout" : (plans.length ? "Rest" : "No plan yet"));
     dateInput.value = currentDate;
     var dd = document.getElementById("date-display");
     if(dd){
@@ -1638,6 +1590,12 @@
 
   function renderToday(){
     var plan = currentDayPlan;
+    if(!plans.length && plan.exercises.length === 0 && plan.cardio.length === 0){
+      content.innerHTML = '<div class="tab-panel rest-day"><div class="big">No workout plan yet</div>' +
+        'Create a plan with your weekly exercises, and each day\'s workout will show up here.' +
+        '<div style="margin-top:20px"><button class="pill-btn accent" data-go-new-plan>Create a plan</button></div></div>';
+      return;
+    }
     if(plan.exercises.length === 0 && plan.cardio.length === 0){
       content.innerHTML = '<div class="tab-panel rest-day"><div class="big">Rest day</div>Full recovery — nothing logged here today.</div>';
       return;
@@ -1953,6 +1911,12 @@
     setDirty(false);
     showToast("Plan saved");
     await store.savePlan(saved);
+    if(!planById(activePlanId)){
+      /* First plan you make becomes the active one. */
+      activePlanId = saved.id;
+      await store.setActivePlan(saved.id);
+      if(activeTab === "plans") renderPlans();
+    }
   }
   function discardDraft(){
     draft = null;
@@ -2013,6 +1977,9 @@
     var html = '<div class="tab-panel plans-panel">';
     html += '<div class="plans-head"><h2>Plans</h2><button class="pill-btn accent" data-plan-new>+ New plan</button></div>';
     html += '<p class="plans-hint">The active plan drives your Today screen. Past workouts keep the plan they were done with.</p>';
+    if(!plans.length){
+      html += '<div class="card empty-plans"><div class="big">No plans yet</div>Tap <b>+ New plan</b> to set up your week: pick a day, add exercises, then save.</div>';
+    }
     plans.forEach(function(p){
       var isActive = p.id === activePlanId;
       html += '<div class="card plan-card' + (isActive ? ' active' : '') + '">';
@@ -2124,11 +2091,7 @@
     if(!dayHasContent(day)) html += '<p class="plans-hint center">Empty days show as a rest day.</p>';
 
     html += '<div class="danger-zone">';
-    if(isActive){
-      html += '<p class="plans-hint center">To delete this plan, make another plan active first.</p>';
-    } else {
-      html += '<button class="pill-btn danger" data-plan-delete="' + p.id + '">Delete plan</button>';
-    }
+    html += '<button class="pill-btn danger" data-plan-delete="' + p.id + '">' + (draftIsNew ? 'Discard new plan' : 'Delete plan') + '</button>';
     html += '</div>';
     html += '<div class="save-bar' + (dirty ? ' show' : '') + '" id="save-bar">';
     html += '<span class="save-bar-text">Unsaved changes</span>';
@@ -2161,6 +2124,16 @@
     store.savePlan(p);
     return p;
   }
+
+  content.addEventListener("click", function(e){
+    if(!e.target.closest("[data-go-new-plan]")) return;
+    var plansTab = document.querySelector('nav.tabs button[data-tab="plans"]');
+    plansTab.click();
+    startEditing({ id: uuid(), name: "New plan", data: { days: blankDays() }, updatedAt: Date.now() }, true);
+    editingDay = currentDow;
+    content.scrollTop = 0;
+    renderPlans();
+  });
 
   content.addEventListener("submit", async function(e){
     if(e.target.id !== "pw-form") return;
@@ -2253,11 +2226,19 @@
         discardDraft(); renderPlans(); return;
       }
       var dp = planById(t.dataset.planDelete);
-      if(!dp || dp.id === activePlanId) return;
-      if(!confirm('Delete "' + (dp.name || "Untitled plan") + '"? Workouts you already logged are kept.')) return;
-      plans = plans.filter(function(x){ return x.id !== dp.id; });
+      if(!dp) return;
+      var wasActive = dp.id === activePlanId;
+      var others = plans.filter(function(x){ return x.id !== dp.id; });
+      var note = !wasActive ? "" :
+        (others.length ? ' "' + (others[0].name || "Untitled plan") + '" will become your active plan.' : " You'll have no active plan until you create one.");
+      if(!confirm('Delete "' + (dp.name || "Untitled plan") + '"? Workouts you already logged are kept.' + note)) return;
+      plans = others;
       discardDraft();
       await store.deletePlan(dp.id);
+      if(wasActive){
+        activePlanId = plans.length ? plans[0].id : null;
+        await store.setActivePlan(activePlanId);
+      }
       renderPlans();
       return;
     }
@@ -2509,12 +2490,6 @@
     plans = loaded.plans;
     var settings = await store.getSettings();
     activePlanId = settings.activePlanId;
-    if(!plans.length && loaded.fromRemote){
-      /* First run: turn the built-in programme into your first plan profile. */
-      var first = { id: uuid(), name: "Starter plan", data: { days: clone(DEFAULT_DAYS) }, updatedAt: Date.now() };
-      plans.push(first);
-      await store.savePlan(first);
-    }
     if(plans.length && !planById(activePlanId)){
       activePlanId = plans[0].id;
       await store.setActivePlan(activePlanId);

@@ -52,7 +52,7 @@ Each person gets their own account, their own plans and their own workout histor
 3. Send them the app link and the temporary password.
 4. They sign in, go to **Plans → Account → Change password**, and set their own.
 
-On first sign-in they get a **Starter plan** (a copy of the built-in programme) that they can edit, duplicate or replace.
+On first sign-in they start with no plans. The Today screen shows a **Create a plan** button, and the first plan they save becomes active.
 
 To remove someone, delete them under Authentication → Users. Their plans and logs are deleted with them.
 
@@ -89,6 +89,6 @@ Edits in the plan editor are a draft until you press **Save** in the bar at the 
 - The active plan drives the Today screen.
 - Past workouts keep a snapshot of the plan they were done with, so switching or editing plans never changes your history.
 - Progress charts match exercises by an internal key, so the same exercise shares history across plans (duplicated plans keep the keys). Renaming an exercise later keeps its history.
-- The built-in programme in `public/index.html` (`DEFAULT_DAYS`) is only used once, to create your first plan.
+- New accounts start with no plans. The first plan someone saves becomes their active plan automatically.
 
 Plans are stored in the `workout_plans` table, and the active plan in `user_settings`. If you set up Supabase before plans existed, run `supabase/002_plans.sql` once in the SQL Editor.
