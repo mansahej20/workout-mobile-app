@@ -359,7 +359,16 @@
     box-shadow: rgb(18,18,18) 0px 1px 0px, rgb(124,124,124) 0px 0px 0px 1px inset;
   }
   .set-row input::placeholder{ color:var(--text-faint); }
-  .set-row.done input{ opacity:0.5; }
+  /* Completed sets stay editable; they're just tinted so you can see they're done. */
+  .set-row.done input{
+    color:var(--text-dim);
+    background:rgba(30,215,96,0.06);
+    box-shadow: rgb(18,18,18) 0px 1px 0px, rgba(30,215,96,0.35) 0px 0px 0px 1px inset;
+  }
+  .set-row.done input:focus{
+    color:var(--text);
+    box-shadow: rgb(18,18,18) 0px 1px 0px, rgb(124,124,124) 0px 0px 0px 1px inset;
+  }
   .check-btn{
     width:40px;
     height:40px;
@@ -1009,7 +1018,6 @@
   }
   .unit-btn:active{ transform:scale(0.9); }
 
-  .set-row.done .unit-btn{ opacity:0.6; }
 
   .icon-del{
     flex:0 0 auto;
@@ -1670,10 +1678,10 @@
           html += '<div class="set-row' + (s.done ? ' done' : '') + '">';
           html += '<div class="idx">' + (i+1) + '</div>';
           html += '<div class="weight-field">';
-          html += '<input type="number" inputmode="decimal" placeholder="0" aria-label="Weight in ' + log.unit + '" value="' + esc(s.weight) + '" data-set-input data-key="' + ex.key + '" data-index="' + i + '" data-field="weight" ' + (s.done ? 'disabled' : '') + ' />';
+          html += '<input type="number" inputmode="decimal" placeholder="0" aria-label="Weight in ' + log.unit + '" value="' + esc(s.weight) + '" data-set-input data-key="' + ex.key + '" data-index="' + i + '" data-field="weight" ' + ' />';
           html += '<button type="button" class="unit-btn' + (log.unit === "lbs" ? ' lbs' : '') + '" data-unit-toggle="' + ex.key + '" aria-label="Weight unit: ' + log.unit + '. Tap to switch.">' + log.unit + '</button>';
           html += '</div>';
-          html += '<input type="number" inputmode="numeric" placeholder="' + esc(ex.reps) + '" value="' + esc(s.reps) + '" data-set-input data-key="' + ex.key + '" data-index="' + i + '" data-field="reps" ' + (s.done ? 'disabled' : '') + ' />';
+          html += '<input type="number" inputmode="numeric" placeholder="' + esc(ex.reps) + '" value="' + esc(s.reps) + '" data-set-input data-key="' + ex.key + '" data-index="' + i + '" data-field="reps" ' + ' />';
           html += '<button class="check-btn' + (s.done ? ' on' : '') + '" data-set-done data-key="' + ex.key + '" data-index="' + i + '" data-rest="' + ex.rest + '" data-name="' + esc(ex.name) + '">&#10003;</button>';
           html += '</div>';
         });
