@@ -84,6 +84,8 @@ SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run dev
 
 Workout plans live in the **Plans** tab. You can keep several plan profiles, edit any of them day by day, duplicate one as a starting point, and switch which one is active.
 
+Edits in the plan editor are a draft until you press **Save** in the bar at the bottom. Leaving with unsaved edits asks whether to save, discard or keep editing.
+
 - The active plan drives the Today screen.
 - Past workouts keep a snapshot of the plan they were done with, so switching or editing plans never changes your history.
 - Progress charts match exercises by an internal key, so the same exercise shares history across plans (duplicated plans keep the keys). Renaming an exercise later keeps its history.

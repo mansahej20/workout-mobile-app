@@ -930,6 +930,66 @@
   .pw-msg{ font-size:13px; min-height:18px; margin-top:10px; color:var(--text-dim); }
   .pw-msg.err{ color:var(--negative); }
   .pw-msg.ok{ color:var(--accent); }
+
+  .plan-editor{ padding-bottom:12px; }
+  .save-bar{
+    position:sticky;
+    bottom:0;
+    z-index:5;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:24px -16px -24px;
+    padding:12px 16px;
+    background:var(--surface-2);
+    box-shadow:var(--shadow-heavy);
+    border-radius:var(--radius-l) var(--radius-l) 0 0;
+    transform:translateY(110%);
+    opacity:0;
+    pointer-events:none;
+    transition:transform 240ms var(--ease-out), opacity 180ms var(--ease-out);
+  }
+  .save-bar.show{ transform:translateY(0); opacity:1; pointer-events:auto; }
+  .save-bar-text{ flex:1; min-width:0; font-size:13px; font-weight:700; color:var(--warning); }
+  .save-bar .pill-btn{ min-width:88px; }
+
+  .sheet-backdrop{
+    position:fixed; inset:0; z-index:60;
+    background:rgba(0,0,0,0.6);
+    display:flex; align-items:flex-end; justify-content:center;
+    opacity:0; pointer-events:none;
+    transition:opacity 200ms var(--ease-out);
+  }
+  .sheet-backdrop.show{ opacity:1; pointer-events:auto; }
+  .sheet{
+    width:100%; max-width:520px;
+    background:var(--surface-2);
+    border-radius:var(--radius-l) var(--radius-l) 0 0;
+    padding:20px 16px calc(16px + env(safe-area-inset-bottom,0px));
+    box-shadow:var(--shadow-heavy);
+    transform:translateY(100%);
+    transition:transform 280ms cubic-bezier(0.32,0.72,0,1);
+    display:flex; flex-direction:column; gap:8px;
+  }
+  .sheet-backdrop.show .sheet{ transform:translateY(0); }
+  .sheet-title{ font-size:18px; font-weight:700; }
+  .sheet-text{ color:var(--text-dim); font-size:14px; margin:0 0 8px; }
+  .sheet-btn{ width:100%; height:48px; }
+
+  .toast{
+    position:fixed; left:50%; bottom:calc(84px + env(safe-area-inset-bottom,0px));
+    z-index:70;
+    transform:translate(-50%, 12px);
+    background:var(--text); color:#121212;
+    font-size:13px; font-weight:700;
+    padding:10px 18px; border-radius:9999px;
+    opacity:0; pointer-events:none;
+    transition:opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+  }
+  .toast.show{ opacity:1; transform:translate(-50%, 0); }
+  @media (prefers-reduced-motion: reduce){
+    .save-bar, .sheet, .sheet-backdrop, .toast{ transition:none; }
+  }
 </style>
 </head>
 <body>
@@ -945,6 +1005,17 @@
     <div class="auth-error" id="auth-error" role="alert"></div>
   </form>
 </div>
+
+<div id="leave-sheet" class="sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="leave-sheet-title">
+  <div class="sheet">
+    <div class="sheet-title" id="leave-sheet-title">Save changes?</div>
+    <p class="sheet-text">You have edits that haven't been saved.</p>
+    <button class="pill-btn accent sheet-btn" data-leave="save">Save</button>
+    <button class="pill-btn sheet-btn" data-leave="discard">Discard changes</button>
+    <button class="text-btn sheet-btn" data-leave="cancel">Keep editing</button>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <div id="app">
   <header id="app-header">
@@ -1537,7 +1608,10 @@
   tabButtons.forEach(function(btn){
     btn.addEventListener("click", function(){
       var next = btn.getAttribute("data-tab");
-      if(activeTab === "plans" && next !== "plans") closePlanEditor();
+      if(activeTab === "plans" && next !== "plans" && editingPlanId){
+        leaveEditor().then(function(ok){ if(ok) btn.click(); });
+        return;
+      }
       activeTab = next;
       tabButtons.forEach(function(b){ b.classList.toggle("active", b===btn); });
       document.getElementById("app-header").style.display = activeTab === "plans" ? "none" : "";
@@ -1799,8 +1873,10 @@
   var DAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
   var REST_OPTIONS = [30,45,60,75,90,120,150,180,240,300];
   var editingPlanId = null;
+  var draft = null;        /* working copy of the plan being edited */
+  var draftIsNew = false;  /* new plans only exist once saved */
+  var dirty = false;
   var editingDay = 1;
-  var planSaveTimer = null;
 
   function uuid(){
     if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -1824,7 +1900,7 @@
     return d;
   }
   function planById(id){ return plans.find(function(p){ return p.id === id; }); }
-  function editingPlan(){ return planById(editingPlanId); }
+  function editingPlan(){ return draft && draft.id === editingPlanId ? draft : null; }
   function editingDayData(){
     var p = editingPlan();
     if(!p) return null;
@@ -1845,29 +1921,88 @@
     return trainingDays + (trainingDays === 1 ? " training day" : " training days") + " · " + exCount + (exCount === 1 ? " exercise" : " exercises");
   }
 
-  function schedulePlanSave(){
-    clearTimeout(planSaveTimer);
-    planSaveTimer = setTimeout(flushPlanSave, 600);
+  /* Edits only touch the draft. Nothing is stored until you press Save. */
+  function schedulePlanSave(){ setDirty(true); }
+  function setDirty(v){
+    dirty = v;
+    var bar = document.getElementById("save-bar");
+    if(bar) bar.classList.toggle("show", v);
   }
-  function flushPlanSave(){
-    clearTimeout(planSaveTimer);
-    planSaveTimer = null;
-    var p = editingPlan();
-    if(p) store.savePlan(p);
+  function startEditing(plan, isNew){
+    draft = clone(plan);
+    draftIsNew = !!isNew;
+    editingPlanId = draft.id;
+    dirty = !!isNew;
   }
-  /* New exercises take their history key from their name while the editor is open.
-     Once you leave, the key is fixed so renaming later keeps your progress history. */
-  function closePlanEditor(){
-    var p = editingPlan();
-    if(p){
-      DAY_ORDER.forEach(function(d){
-        var day = normaliseDay(p.data.days[d]);
-        day.exercises.concat(day.cardio).forEach(function(x){ delete x.autoKey; });
-      });
-      flushPlanSave();
-    }
+  /* New exercises take their history key from their name until the plan is saved.
+     After that the key is fixed, so renaming later keeps your progress history. */
+  function lockKeys(plan){
+    DAY_ORDER.forEach(function(d){
+      var day = normaliseDay(plan.data.days[d]);
+      plan.data.days[d] = day;
+      day.exercises.concat(day.cardio).forEach(function(x){ delete x.autoKey; });
+    });
+  }
+  async function saveDraft(){
+    if(!draft) return;
+    lockKeys(draft);
+    var saved = clone(draft);
+    var i = plans.findIndex(function(x){ return x.id === saved.id; });
+    if(i === -1) plans.push(saved); else plans[i] = saved;
+    draftIsNew = false;
+    setDirty(false);
+    showToast("Plan saved");
+    await store.savePlan(saved);
+  }
+  function discardDraft(){
+    draft = null;
+    draftIsNew = false;
     editingPlanId = null;
+    dirty = false;
   }
+  function closePlanEditor(){ discardDraft(); }
+
+  /* Ask before throwing away edits. Resolves to "save", "discard" or "cancel". */
+  function confirmLeave(){
+    if(!dirty || !draft) return Promise.resolve("discard");
+    return new Promise(function(resolve){
+      var sheet = document.getElementById("leave-sheet");
+      document.getElementById("leave-sheet-title").textContent =
+        draftIsNew ? "Save this new plan?" : 'Save changes to "' + (draft.name || "Untitled plan") + '"?';
+      sheet.classList.add("show");
+      function done(choice){
+        sheet.classList.remove("show");
+        sheet.removeEventListener("click", onClick);
+        resolve(choice);
+      }
+      function onClick(e){
+        var b = e.target.closest("[data-leave]");
+        if(b) done(b.dataset.leave);
+        else if(e.target === sheet) done("cancel");
+      }
+      sheet.addEventListener("click", onClick);
+    });
+  }
+  async function leaveEditor(){
+    var choice = await confirmLeave();
+    if(choice === "cancel") return false;
+    if(choice === "save") await saveDraft();
+    discardDraft();
+    return true;
+  }
+
+  var toastTimer = null;
+  function showToast(text){
+    var t = document.getElementById("toast");
+    t.textContent = text;
+    t.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ t.classList.remove("show"); }, 1600);
+  }
+
+  window.addEventListener("beforeunload", function(e){
+    if(dirty){ e.preventDefault(); e.returnValue = ""; }
+  });
 
   function renderPlans(){
     if(editingPlanId && editingPlan()) renderPlanEditor();
@@ -1937,7 +2072,7 @@
     html += '<input class="plan-name-input" data-plan-name value="' + esc(p.name) + '" placeholder="Plan name" aria-label="Plan name" />';
     html += '</div>';
     html += '<div class="editor-status">' + (isActive
-      ? '<span class="active-badge">Active</span><span class="editor-status-text">Changes show on Today straight away.</span>'
+      ? '<span class="active-badge">Active</span><span class="editor-status-text">Saved changes show on Today straight away.</span>'
       : '<button class="pill-btn accent" data-plan-use="' + p.id + '">Use this plan</button>') + '</div>';
 
     html += '<div class="day-chips" role="tablist">';
@@ -1995,19 +2130,26 @@
       html += '<button class="pill-btn danger" data-plan-delete="' + p.id + '">Delete plan</button>';
     }
     html += '</div>';
+    html += '<div class="save-bar' + (dirty ? ' show' : '') + '" id="save-bar">';
+    html += '<span class="save-bar-text">Unsaved changes</span>';
+    html += '<button class="text-btn" data-draft-discard>Discard</button>';
+    html += '<button class="pill-btn accent" data-draft-save>Save</button>';
+    html += '</div>';
     html += '</div>';
     content.innerHTML = html;
   }
 
   function openPlan(id){
-    editingPlanId = id;
+    var src = planById(id);
+    if(!src) return;
+    startEditing(src, false);
     editingDay = currentDow;
     content.scrollTop = 0;
     renderPlans();
   }
 
   async function useplan(id){
-    flushPlanSave();
+    if(draft && draft.id === id && (dirty || draftIsNew)) await saveDraft();
     activePlanId = id;
     await store.setActivePlan(id);
     renderPlans();
@@ -2081,8 +2223,10 @@
       return;
     }
     if((t = e.target.closest("[data-plan-new]"))){
-      var np = addPlan("New plan", blankDays());
-      openPlan(np.id);
+      startEditing({ id: uuid(), name: "New plan", data: { days: blankDays() }, updatedAt: Date.now() }, true);
+      editingDay = currentDow;
+      content.scrollTop = 0;
+      renderPlans();
       setTimeout(function(){ var el = content.querySelector("[data-plan-name]"); if(el){ el.focus(); el.select(); } }, 50);
       return;
     }
@@ -2093,14 +2237,26 @@
       return;
     }
     if((t = e.target.closest("[data-plan-use]"))){ useplan(t.dataset.planUse); return; }
-    if((t = e.target.closest("[data-plan-back]"))){ closePlanEditor(); content.scrollTop = 0; renderPlans(); return; }
+    if((t = e.target.closest("[data-plan-back]"))){
+      if(await leaveEditor()){ content.scrollTop = 0; renderPlans(); }
+      return;
+    }
+    if((t = e.target.closest("[data-draft-save]"))){ await saveDraft(); return; }
+    if((t = e.target.closest("[data-draft-discard]"))){
+      if(draftIsNew){ discardDraft(); content.scrollTop = 0; renderPlans(); return; }
+      var orig = planById(editingPlanId);
+      if(orig){ startEditing(orig, false); renderPlans(); showToast("Changes discarded"); }
+      return;
+    }
     if((t = e.target.closest("[data-plan-delete]"))){
+      if(draftIsNew && draft && draft.id === t.dataset.planDelete){
+        discardDraft(); renderPlans(); return;
+      }
       var dp = planById(t.dataset.planDelete);
       if(!dp || dp.id === activePlanId) return;
       if(!confirm('Delete "' + (dp.name || "Untitled plan") + '"? Workouts you already logged are kept.')) return;
-      clearTimeout(planSaveTimer);
       plans = plans.filter(function(x){ return x.id !== dp.id; });
-      editingPlanId = null;
+      discardDraft();
       await store.deletePlan(dp.id);
       renderPlans();
       return;
@@ -2108,7 +2264,6 @@
     if(!editingPlanId) return;
     var day = editingDayData();
     if((t = e.target.closest("[data-edit-day]"))){
-      flushPlanSave();
       editingDay = +t.dataset.editDay;
       renderPlans();
       return;
