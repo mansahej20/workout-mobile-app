@@ -920,13 +920,23 @@
   .add-btn:active{ transform:scale(0.98); color:var(--accent); border-color:var(--accent); }
   .empty-note{ color:var(--text-faint); font-size:13px; margin:0 0 10px; }
   .danger-zone{ margin-top:28px; padding-top:20px; border-top:1px solid var(--border); text-align:center; }
+
+  .account-card{ padding:16px; margin-top:24px; }
+  .account-email{ font-size:15px; font-weight:700; margin:0 0 12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pw-form{ margin-top:16px; display:flex; flex-direction:column; }
+  .pw-form[hidden]{ display:none; }
+  .pw-form .text-input{ margin-bottom:12px; }
+  .pw-form .pill-btn{ align-self:flex-start; }
+  .pw-msg{ font-size:13px; min-height:18px; margin-top:10px; color:var(--text-dim); }
+  .pw-msg.err{ color:var(--negative); }
+  .pw-msg.ok{ color:var(--accent); }
 </style>
 </head>
 <body>
 <div id="auth-screen">
   <form class="auth-box" id="auth-form">
     <h1 class="auth-title">Set <span>Log</span></h1>
-    <p class="auth-sub">Sign in to sync your sets across devices.</p>
+    <p class="auth-sub">Sign in to your account. No account yet? Ask the app owner to add you.</p>
     <label for="auth-email">Email</label>
     <input id="auth-email" type="email" autocomplete="email" autocapitalize="none" autocorrect="off" required />
     <label for="auth-password">Password</label>
@@ -1084,6 +1094,44 @@
     try{ localStorage.setItem(PENDING_KEY, JSON.stringify(arr)); }catch(e){}
     updateSyncDot();
   }
+  /* Every cache key is scoped to the signed-in user, so several people
+     can share one phone without seeing each other's workouts. */
+  var currentUserEmail = "";
+  var cacheNs = "setlog:";
+  function useNamespace(uid){
+    var ns = "setlog:" + uid + ":";
+    try{
+      if(!localStorage.getItem("setlog:migratedTo")){
+        /* One-time move of data cached before accounts were per-user. */
+        var legacy = /^setlog:(\d{4}-\d{2}-\d{2}|pending|plans|settings|pendingPlans|pendingSettings)$/;
+        var keys = [];
+        for(var i=0;i<localStorage.length;i++){ var k = localStorage.key(i); if(legacy.test(k)) keys.push(k); }
+        keys.forEach(function(k){
+          localStorage.setItem(ns + k.slice("setlog:".length), localStorage.getItem(k));
+          localStorage.removeItem(k);
+        });
+        localStorage.setItem("setlog:migratedTo", uid);
+      }
+    }catch(e){}
+    cacheNs = ns;
+    CACHE_PREFIX = ns;
+    PENDING_KEY = ns + "pending";
+    PLANS_CACHE_KEY = ns + "plans";
+    SETTINGS_CACHE_KEY = ns + "settings";
+    PLAN_QUEUE_KEY = ns + "pendingPlans";
+    SETTINGS_PENDING_KEY = ns + "pendingSettings";
+  }
+  function hasUnsynced(){
+    return pendingGet().length > 0 || planQueueGet().length > 0 || settingsPending();
+  }
+  function clearUserCache(){
+    try{
+      var keys = [];
+      for(var i=0;i<localStorage.length;i++){ var k = localStorage.key(i); if(k && k.indexOf(cacheNs) === 0) keys.push(k); }
+      keys.forEach(function(k){ localStorage.removeItem(k); });
+    }catch(e){}
+  }
+
   var PLANS_CACHE_KEY = "setlog:plans";
   var SETTINGS_CACHE_KEY = "setlog:settings";
   var PLAN_QUEUE_KEY = "setlog:pendingPlans";
@@ -1123,7 +1171,7 @@
 
     async function pushPlanOp(op){
       if(op.op === "delete"){
-        var del = await client.from("workout_plans").delete().eq("id", op.id);
+        var del = await client.from("workout_plans").delete().eq("user_id", userId).eq("id", op.id);
         if(del.error) throw del.error;
         return;
       }
@@ -1190,7 +1238,7 @@
       async getDoc(date){
         var local = cacheGet(date);
         try{
-          var res = await client.from(TABLE).select("data").eq("log_date", date).maybeSingle();
+          var res = await client.from(TABLE).select("data").eq("user_id", userId).eq("log_date", date).maybeSingle();
           if(res.error) throw res.error;
           var remote = res.data ? res.data.data : null;
           if(remote && (!local || (remote.updatedAt || 0) >= (local.updatedAt || 0))){
@@ -1211,7 +1259,7 @@
       async loadPlans(){
         var local = readJSON(PLANS_CACHE_KEY, []);
         try{
-          var res = await client.from("workout_plans").select("id,name,data,updated_at").order("created_at", { ascending:true });
+          var res = await client.from("workout_plans").select("id,name,data,updated_at").eq("user_id", userId).order("created_at", { ascending:true });
           if(res.error) throw res.error;
           var pendingUp = {}, pendingDel = {};
           planQueueGet().forEach(function(o){ if(o.op === "delete") pendingDel[o.id] = true; else pendingUp[o.id] = true; });
@@ -1237,7 +1285,7 @@
         var local = readJSON(SETTINGS_CACHE_KEY, {});
         if(settingsPending()) return local;
         try{
-          var res = await client.from("user_settings").select("active_plan_id").maybeSingle();
+          var res = await client.from("user_settings").select("active_plan_id").eq("user_id", userId).maybeSingle();
           if(res.error) throw res.error;
           var st = { activePlanId: res.data ? res.data.active_plan_id : null };
           writeJSON(SETTINGS_CACHE_KEY, st);
@@ -1269,7 +1317,7 @@
       async queryRecent(limit){
         var byDate = {};
         try{
-          var res = await client.from(TABLE).select("log_date,data").order("log_date", { ascending:false }).limit(limit);
+          var res = await client.from(TABLE).select("log_date,data").eq("user_id", userId).order("log_date", { ascending:false }).limit(limit);
           if(res.error) throw res.error;
           res.data.forEach(function(row){ byDate[row.log_date] = row.data; });
         }catch(e){}
@@ -1307,6 +1355,8 @@
     sb.auth.onAuthStateChange(function(event){
       if(event === "SIGNED_OUT"){ location.reload(); }
     });
+    useNamespace(session.user.id);
+    currentUserEmail = session.user.email || "";
     return supabaseStore(sb, session.user.id);
   }
 
@@ -1680,11 +1730,12 @@
   }
 
   async function signOut(){
-      try{
-        [PENDING_KEY, PLAN_QUEUE_KEY, SETTINGS_PENDING_KEY, PLANS_CACHE_KEY, SETTINGS_CACHE_KEY].forEach(function(k){ localStorage.removeItem(k); });
-      }catch(e){}
-      if(sb) await sb.auth.signOut();
+    if(hasUnsynced() && !confirm("Some changes haven't synced yet and will be lost if you sign out now. Sign out anyway?")) return;
+    clearUserCache();
+    if(sb) await sb.auth.signOut();
+    location.reload();
   }
+
 
   async function loadProgressData(){
     var docs = await store.queryRecent(30);
@@ -1845,7 +1896,19 @@
       if(!isActive) html += '<button class="pill-btn accent" data-plan-use="' + p.id + '">Use plan</button>';
       html += '</div></div>';
     });
-    html += '<div class="signout-row"><button class="text-btn" data-signout>Sign out</button></div>';
+    html += '<div class="card account-card">';
+    html += '<span class="field-label">Account</span>';
+    html += '<div class="account-email">' + esc(currentUserEmail || "Signed in") + '</div>';
+    html += '<div class="plan-actions"><button class="pill-btn" data-pw-toggle>Change password</button><button class="pill-btn" data-signout>Sign out</button></div>';
+    html += '<form class="pw-form" id="pw-form" hidden>';
+    html += '<label class="field-label" for="pw-new">New password</label>';
+    html += '<input class="text-input" id="pw-new" type="password" autocomplete="new-password" minlength="8" required />';
+    html += '<label class="field-label" for="pw-confirm">Confirm new password</label>';
+    html += '<input class="text-input" id="pw-confirm" type="password" autocomplete="new-password" minlength="8" required />';
+    html += '<button class="pill-btn accent" type="submit" id="pw-save">Save password</button>';
+    html += '<div class="pw-msg" id="pw-msg" role="status"></div>';
+    html += '</form>';
+    html += '</div>';
     html += '</div>';
     content.innerHTML = html;
   }
@@ -1957,6 +2020,29 @@
     return p;
   }
 
+  content.addEventListener("submit", async function(e){
+    if(e.target.id !== "pw-form") return;
+    e.preventDefault();
+    var pw = document.getElementById("pw-new").value;
+    var pw2 = document.getElementById("pw-confirm").value;
+    var msg = document.getElementById("pw-msg");
+    var btn = document.getElementById("pw-save");
+    msg.className = "pw-msg";
+    if(pw.length < 8){ msg.textContent = "Use at least 8 characters."; msg.classList.add("err"); return; }
+    if(pw !== pw2){ msg.textContent = "The two passwords don't match."; msg.classList.add("err"); return; }
+    btn.disabled = true; btn.textContent = "Saving…";
+    var res = await sb.auth.updateUser({ password: pw });
+    btn.disabled = false; btn.textContent = "Save password";
+    if(res.error){
+      msg.textContent = res.error.message || "Couldn't change your password. Check your connection and try again.";
+      msg.classList.add("err");
+      return;
+    }
+    e.target.reset();
+    msg.textContent = "Password changed.";
+    msg.classList.add("ok");
+  });
+
   content.addEventListener("input", function(e){
     if(activeTab !== "plans" || !editingPlanId) return;
     var t = e.target, p = editingPlan(), day = editingDayData();
@@ -1988,6 +2074,12 @@
     if(activeTab !== "plans") return;
     var t;
     if((t = e.target.closest("[data-signout]"))){ signOut(); return; }
+    if((t = e.target.closest("[data-pw-toggle]"))){
+      var f = document.getElementById("pw-form");
+      f.hidden = !f.hidden;
+      if(!f.hidden){ document.getElementById("pw-new").focus(); }
+      return;
+    }
     if((t = e.target.closest("[data-plan-new]"))){
       var np = addPlan("New plan", blankDays());
       openPlan(np.id);
@@ -2264,7 +2356,7 @@
     activePlanId = settings.activePlanId;
     if(!plans.length && loaded.fromRemote){
       /* First run: turn the built-in programme into your first plan profile. */
-      var first = { id: uuid(), name: "Main plan", data: { days: clone(DEFAULT_DAYS) }, updatedAt: Date.now() };
+      var first = { id: uuid(), name: "Starter plan", data: { days: clone(DEFAULT_DAYS) }, updatedAt: Date.now() };
       plans.push(first);
       await store.savePlan(first);
     }

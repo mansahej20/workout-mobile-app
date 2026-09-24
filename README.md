@@ -43,12 +43,36 @@ Open the Vercel URL on your phone and sign in.
 
 It then opens full screen like a normal app.
 
+## Adding friends
+
+Each person gets their own account, their own plans and their own workout history. Sign-ups stay switched off, so only people you add can get in.
+
+1. Supabase → **Authentication → Users → Add user → Create new user**.
+2. Enter your friend's email and a temporary password, and tick **Auto Confirm User**.
+3. Send them the app link and the temporary password.
+4. They sign in, go to **Plans → Account → Change password**, and set their own.
+
+On first sign-in they get a **Starter plan** (a copy of the built-in programme) that they can edit, duplicate or replace.
+
+To remove someone, delete them under Authentication → Users. Their plans and logs are deleted with them.
+
+If a friend forgets their password: Supabase's built-in email only reaches members of your Supabase team, so reset emails won't reach friends. Don't delete and re-add them, because that deletes their data. Instead, set a new temporary password in **SQL Editor** and send it to them:
+
+```sql
+update auth.users
+set encrypted_password = crypt('NewTempPass123', gen_salt('bf'))
+where email = 'friend@example.com';
+```
+
+They sign in with it and change it under Plans → Account.
+
 ## How data works
 
 - Each day is one row in `workout_logs` (`log_date` + a `data` JSON blob).
 - Every change saves to the phone first, then syncs to Supabase. With no signal at the gym, sets still save; they sync when you're back online.
 - The small dot next to the day's plan name is green when synced, orange when changes are waiting to upload.
-- Row Level Security means the anon key can only ever touch rows belonging to the signed-in user.
+- Row Level Security means the anon key can only ever touch rows belonging to the signed-in user. The app also filters every query by user as a second layer.
+- The offline cache on the phone is kept separately per account, and signing out clears it, so friends can share a device.
 
 ## Run locally
 
