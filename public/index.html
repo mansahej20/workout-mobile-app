@@ -1031,6 +1031,24 @@
   @media (hover:hover) and (pointer:fine){
     .icon-del:hover{ color:var(--negative); background:rgba(243,114,127,0.12); }
   }
+
+  /* Unit stays visible next to the number you type, e.g. "5.2 km". */
+  .cardio-field{ position:relative; flex:0 0 auto; display:block; }
+  .cardio-card .cardio-field input{ width:92px; padding-right:38px; padding-left:6px; text-align:right; }
+  .cardio-card{ flex-wrap:nowrap; }
+  .cardio-card .cinfo{ flex:1 1 0; min-width:0; }
+  .cardio-card .cname{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .cardio-card .done-pill{ padding:0 14px; }
+  /* Hide number spinners; phones use the keypad anyway. */
+  input[type=number]::-webkit-outer-spin-button,
+  input[type=number]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  input[type=number]{ -moz-appearance:textfield; }
+  .cardio-unit{
+    position:absolute; top:0; right:10px; bottom:0;
+    display:flex; align-items:center;
+    font-size:13px; font-weight:700; color:var(--text-dim);
+    pointer-events:none;
+  }
 </style>
 </head>
 <body>
@@ -1698,7 +1716,10 @@
         html += '<div class="cinfo"><div class="cname">' + esc(c.name) + '</div><div class="ctarget">' + esc(c.target) + '</div></div>';
         if(c.kind !== "done"){
           var unit = c.kind === "distance" ? "km" : "min";
-          html += '<input type="number" inputmode="decimal" placeholder="' + unit + '" value="' + esc(log.value) + '" data-cardio-input data-key="' + c.key + '" />';
+          html += '<label class="cardio-field">';
+          html += '<input type="number" inputmode="decimal" placeholder="0" aria-label="' + esc(c.name || "Cardio") + ' in ' + unit + '" value="' + esc(log.value) + '" data-cardio-input data-key="' + c.key + '" />';
+          html += '<span class="cardio-unit" aria-hidden="true">' + unit + '</span>';
+          html += '</label>';
         }
         html += '<button class="done-pill' + (log.done ? ' on' : '') + '" data-cardio-done data-key="' + c.key + '">' + (log.done ? 'Done' : 'Mark') + '</button>';
         html += '</div>';
