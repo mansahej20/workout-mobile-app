@@ -784,6 +784,142 @@
     transition:background 200ms ease;
   }
   .sync-dot.pending{ background:var(--warning); }
+
+  /* ---------- Plans ---------- */
+  .plans-panel, .plan-editor{ padding-top:calc(4px + env(safe-area-inset-top,0px)); }
+  .plans-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:6px; }
+  .plans-head h2{ margin:0; font-size:24px; font-weight:700; letter-spacing:-0.3px; }
+  .plans-hint{ color:var(--text-dim); font-size:13px; line-height:1.45; margin:0 0 16px; }
+  .plans-hint.center{ text-align:center; margin:16px 0 0; }
+  .pill-btn{
+    background:var(--surface-2);
+    color:var(--text);
+    border:none;
+    border-radius:9999px;
+    height:40px;
+    padding:0 16px;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:1.2px;
+    text-transform:uppercase;
+    white-space:nowrap;
+    transition:transform 140ms var(--ease-out), background 140ms var(--ease-out);
+  }
+  .pill-btn:active{ transform:scale(0.95); background:var(--border); }
+  .pill-btn.accent{ background:var(--accent); color:#050f08; }
+  .pill-btn.accent:active{ background:var(--accent-dim); }
+  .pill-btn.danger{ background:transparent; color:var(--negative); box-shadow:inset 0 0 0 1px rgba(243,114,127,0.5); }
+  .plan-card{ padding:16px; }
+  .plan-card.active{ box-shadow:var(--shadow-med), inset 0 0 0 1px rgba(30,215,96,0.45); }
+  .plan-card-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .plan-card-name{ font-size:17px; font-weight:700; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .plan-card-sub{ color:var(--text-dim); font-size:13px; margin-top:4px; }
+  .active-badge{
+    flex:0 0 auto;
+    font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase;
+    color:#050f08; background:var(--accent);
+    border-radius:9999px; padding:4px 10px;
+  }
+  .week-dots{ display:flex; gap:6px; margin:12px 0 14px; }
+  .week-dot{
+    width:28px; height:28px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700;
+    background:var(--surface-2); color:var(--text-faint);
+  }
+  .week-dot.on{ background:rgba(30,215,96,0.16); color:var(--accent); }
+  .plan-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  .editor-top{ display:flex; align-items:center; gap:10px; margin-bottom:12px; }
+  .plan-name-input{
+    flex:1; min-width:0;
+    background:transparent; border:none; color:var(--text);
+    font-size:22px; font-weight:700; letter-spacing:-0.3px;
+    padding:6px 2px; border-bottom:1px solid var(--border);
+    border-radius:0;
+  }
+  .plan-name-input:focus{ outline:none; border-bottom-color:var(--accent); }
+  .editor-status{ display:flex; align-items:center; gap:10px; margin-bottom:16px; min-height:40px; }
+  .editor-status-text{ color:var(--text-dim); font-size:13px; }
+  .day-chips{
+    display:flex; gap:5px; overflow-x:auto; margin:0 0 16px; padding:2px 0;
+    scrollbar-width:none;
+  }
+  .day-chips::-webkit-scrollbar{ display:none; }
+  .day-chip{
+    flex:1 1 0;
+    min-width:44px; height:40px; padding:0 4px;
+    border:none; border-radius:9999px;
+    background:var(--surface-2); color:var(--text-dim);
+    font-size:13px; font-weight:700;
+    position:relative;
+    transition:transform 140ms var(--ease-out), background 140ms var(--ease-out), color 140ms var(--ease-out);
+  }
+  .day-chip:active{ transform:scale(0.94); }
+  .day-chip.has::after{
+    content:""; position:absolute; bottom:5px; left:50%;
+    width:4px; height:4px; margin-left:-2px; border-radius:50%;
+    background:var(--accent);
+  }
+  .day-chip.active{ background:var(--text); color:#121212; }
+  .day-chip.active.has::after{ background:#121212; }
+  .field-label{
+    display:block; font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase;
+    color:var(--text-faint); margin:0 0 6px;
+  }
+  .text-input{
+    width:100%; min-width:0;
+    height:44px;
+    background:var(--surface-2); border:none; color:var(--text);
+    border-radius:var(--radius-s);
+    padding:0 12px;
+    box-shadow: rgb(18,18,18) 0px 1px 0px, rgb(60,60,60) 0px 0px 0px 1px inset;
+    -webkit-appearance:none; appearance:none;
+  }
+  input.text-input{ line-height:44px; padding-top:0; padding-bottom:0; }
+  select.text-input{
+    padding-right:28px;
+    background-image:linear-gradient(45deg, transparent 50%, var(--text-dim) 50%), linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+    background-position:calc(100% - 15px) 19px, calc(100% - 10px) 19px;
+    background-size:5px 5px;
+    background-repeat:no-repeat;
+  }
+  .text-input:focus{ outline:none; box-shadow: rgb(18,18,18) 0px 1px 0px, rgb(124,124,124) 0px 0px 0px 1px inset; }
+  .edit-card{ padding:12px; }
+  .name-input{ font-weight:700; margin-bottom:10px; }
+  .edit-grid{ display:grid; grid-template-columns:1.15fr 1fr 1fr; gap:8px; }
+  .edit-grid.two{ grid-template-columns:1fr 1fr; }
+  .edit-field{ min-width:0; }
+  .stepper{
+    display:flex; align-items:center; justify-content:space-between;
+    height:44px; background:var(--surface-2); border-radius:var(--radius-s);
+    box-shadow: rgb(18,18,18) 0px 1px 0px, rgb(60,60,60) 0px 0px 0px 1px inset;
+    padding:0 2px;
+  }
+  .stepper .mini-btn{ background:transparent; width:36px; }
+  .stepper-val{ font-weight:700; font-variant-numeric:tabular-nums; }
+  .edit-actions{ display:flex; gap:6px; justify-content:flex-end; margin-top:10px; }
+  .mini-btn{
+    height:36px; min-width:36px; padding:0 10px;
+    border:none; border-radius:9999px;
+    background:var(--surface-2); color:var(--text);
+    font-size:14px; font-weight:700;
+    transition:transform 140ms var(--ease-out), background 140ms var(--ease-out);
+  }
+  .mini-btn:active{ transform:scale(0.9); background:var(--border); }
+  .mini-btn[disabled]{ opacity:0.3; }
+  .mini-btn.danger{ color:var(--negative); font-size:11px; letter-spacing:1px; text-transform:uppercase; }
+  .add-btn{
+    width:100%; height:48px;
+    background:transparent; color:var(--text-dim);
+    border:1.5px dashed var(--border); border-radius:9999px;
+    font-size:12px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase;
+    margin-bottom:4px;
+    transition:transform 140ms var(--ease-out), color 140ms var(--ease-out), border-color 140ms var(--ease-out);
+  }
+  .add-btn:active{ transform:scale(0.98); color:var(--accent); border-color:var(--accent); }
+  .empty-note{ color:var(--text-faint); font-size:13px; margin:0 0 10px; }
+  .danger-zone{ margin-top:28px; padding-top:20px; border-top:1px solid var(--border); text-align:center; }
 </style>
 </head>
 <body>
@@ -801,7 +937,7 @@
 </div>
 
 <div id="app">
-  <header>
+  <header id="app-header">
     <div class="header-top">
       <div class="day-name">
         <span class="weekday" id="weekday-label">—</span>
@@ -824,6 +960,7 @@
   <nav class="tabs">
     <button data-tab="today" class="active">Today</button>
     <button data-tab="progress">Progress</button>
+    <button data-tab="plans">Plans</button>
   </nav>
 
   <div id="rest-bar">
@@ -868,7 +1005,8 @@
   "use strict";
 
   /* ---------------- Plan data ---------------- */
-  var PLAN = {
+  /* Built-in starter plan: used to seed your first plan profile. */
+  var DEFAULT_DAYS = {
     1: { title:"Legs", exercises:[
       {key:"back-squat", name:"Barbell Back Squat", sets:4, reps:"6-8", rest:150},
       {key:"rdl", name:"Romanian Deadlift", sets:4, reps:"8-10", rest:90},
@@ -922,17 +1060,6 @@
 
   var WEEKDAY_NAMES = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-  var ALL_EXERCISES = (function(){
-    var map = {}, list = [];
-    [1,2,3,4,5,6,0].forEach(function(d){
-      PLAN[d].exercises.forEach(function(ex){
-        if(!map[ex.key]){ map[ex.key]=true; list.push({key:ex.key, name:ex.name}); }
-      });
-    });
-    return list;
-  })();
-
-  /* ---------------- Storage ---------------- */
   function pad(n){ return String(n).padStart(2,"0"); }
   function todayStr(){
     var d = new Date();
@@ -957,10 +1084,28 @@
     try{ localStorage.setItem(PENDING_KEY, JSON.stringify(arr)); }catch(e){}
     updateSyncDot();
   }
+  var PLANS_CACHE_KEY = "setlog:plans";
+  var SETTINGS_CACHE_KEY = "setlog:settings";
+  var PLAN_QUEUE_KEY = "setlog:pendingPlans";
+  var SETTINGS_PENDING_KEY = "setlog:pendingSettings";
+  function readJSON(key, fallback){
+    try{ var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }catch(e){ return fallback; }
+  }
+  function writeJSON(key, value){
+    try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){}
+  }
+  function planQueueGet(){ return readJSON(PLAN_QUEUE_KEY, []); }
+  function planQueueSet(q){ writeJSON(PLAN_QUEUE_KEY, q); updateSyncDot(); }
+  function settingsPending(){ try{ return localStorage.getItem(SETTINGS_PENDING_KEY) === "1"; }catch(e){ return false; } }
+  function setSettingsPending(v){
+    try{ if(v) localStorage.setItem(SETTINGS_PENDING_KEY, "1"); else localStorage.removeItem(SETTINGS_PENDING_KEY); }catch(e){}
+    updateSyncDot();
+  }
+
   function updateSyncDot(){
     var dot = document.getElementById("sync-dot");
     if(!dot) return;
-    var pending = pendingGet().length > 0;
+    var pending = pendingGet().length > 0 || planQueueGet().length > 0 || settingsPending();
     dot.classList.toggle("pending", pending);
     dot.title = pending ? "Saved on this phone, syncing when online" : "Synced";
   }
@@ -976,11 +1121,51 @@
       if(res.error) throw res.error;
     }
 
+    async function pushPlanOp(op){
+      if(op.op === "delete"){
+        var del = await client.from("workout_plans").delete().eq("id", op.id);
+        if(del.error) throw del.error;
+        return;
+      }
+      var plan = readJSON(PLANS_CACHE_KEY, []).find(function(x){ return x.id === op.id; });
+      if(!plan) return;
+      var up = await client.from("workout_plans").upsert({
+        id: plan.id, user_id: userId, name: plan.name, data: plan.data,
+        updated_at: new Date(plan.updatedAt || Date.now()).toISOString()
+      });
+      if(up.error) throw up.error;
+    }
+
+    async function pushSettings(){
+      var st = readJSON(SETTINGS_CACHE_KEY, {});
+      var res = await client.from("user_settings").upsert(
+        { user_id: userId, active_plan_id: st.activePlanId || null, updated_at: new Date().toISOString() },
+        { onConflict: "user_id" }
+      );
+      if(res.error) throw res.error;
+    }
+
+    function enqueuePlan(op){
+      var q = planQueueGet().filter(function(o){ return o.id !== op.id; });
+      q.push(op);
+      planQueueSet(q);
+    }
+
     var flushing = false;
     async function flushPending(){
       if(flushing) return;
       flushing = true;
       try{
+        var pq = planQueueGet();
+        while(pq.length){
+          await pushPlanOp(pq[0]);
+          pq.shift();
+          planQueueSet(pq);
+        }
+        if(settingsPending()){
+          await pushSettings();
+          setSettingsPending(false);
+        }
         var queue = pendingGet();
         while(queue.length){
           var date = queue[0];
@@ -1021,6 +1206,64 @@
         cacheSet(date, data);
         var queue = pendingGet();
         if(queue.indexOf(date) === -1){ queue.push(date); pendingSet(queue); }
+        await flushPending();
+      },
+      async loadPlans(){
+        var local = readJSON(PLANS_CACHE_KEY, []);
+        try{
+          var res = await client.from("workout_plans").select("id,name,data,updated_at").order("created_at", { ascending:true });
+          if(res.error) throw res.error;
+          var pendingUp = {}, pendingDel = {};
+          planQueueGet().forEach(function(o){ if(o.op === "delete") pendingDel[o.id] = true; else pendingUp[o.id] = true; });
+          var merged = res.data
+            .filter(function(r){ return !pendingDel[r.id]; })
+            .map(function(r){
+              if(pendingUp[r.id]){
+                var l = local.find(function(x){ return x.id === r.id; });
+                if(l) return l;
+              }
+              return { id:r.id, name:r.name, data:r.data, updatedAt: Date.parse(r.updated_at) };
+            });
+          local.forEach(function(l){
+            if(pendingUp[l.id] && !merged.some(function(m){ return m.id === l.id; })) merged.push(l);
+          });
+          writeJSON(PLANS_CACHE_KEY, merged);
+          return { plans: merged, fromRemote: true };
+        }catch(e){
+          return { plans: local, fromRemote: false };
+        }
+      },
+      async getSettings(){
+        var local = readJSON(SETTINGS_CACHE_KEY, {});
+        if(settingsPending()) return local;
+        try{
+          var res = await client.from("user_settings").select("active_plan_id").maybeSingle();
+          if(res.error) throw res.error;
+          var st = { activePlanId: res.data ? res.data.active_plan_id : null };
+          writeJSON(SETTINGS_CACHE_KEY, st);
+          return st;
+        }catch(e){
+          return local;
+        }
+      },
+      async savePlan(plan){
+        plan.updatedAt = Date.now();
+        var all = readJSON(PLANS_CACHE_KEY, []);
+        var i = all.findIndex(function(x){ return x.id === plan.id; });
+        if(i === -1) all.push(plan); else all[i] = plan;
+        writeJSON(PLANS_CACHE_KEY, all);
+        enqueuePlan({ op:"upsert", id: plan.id });
+        await flushPending();
+      },
+      async deletePlan(id){
+        var all = readJSON(PLANS_CACHE_KEY, []).filter(function(x){ return x.id !== id; });
+        writeJSON(PLANS_CACHE_KEY, all);
+        enqueuePlan({ op:"delete", id: id });
+        await flushPending();
+      },
+      async setActivePlan(id){
+        writeJSON(SETTINGS_CACHE_KEY, { activePlanId: id });
+        setSettingsPending(true);
         await flushPending();
       },
       async queryRecent(limit){
@@ -1099,15 +1342,51 @@
   var currentLog = null;
   var activeTab = "today";
   var saveTimer = null;
-  var selectedProgressKey = ALL_EXERCISES.length ? ALL_EXERCISES[0].key : null;
+  var selectedProgressKey = null;
   var collapsed = {};
+  var plans = [];
+  var activePlanId = null;
+  var currentDayPlan = { title:"Rest", exercises:[], cardio:[] };
 
-  function defaultLog(dateStr, dow){
-    var p = PLAN[dow];
+  function clone(o){ return JSON.parse(JSON.stringify(o)); }
+  function activePlan(){
+    return plans.find(function(p){ return p.id === activePlanId; }) || plans[0] || null;
+  }
+  function activeDays(){
+    var p = activePlan();
+    return p ? p.data.days : DEFAULT_DAYS;
+  }
+  function emptyDay(){ return { title:"", exercises:[], cardio:[] }; }
+  function normaliseDay(d){
+    d = d || emptyDay();
+    return { title: d.title || "", exercises: d.exercises || [], cardio: d.cardio || [] };
+  }
+  /* Past days that were logged keep the plan they were done with.
+     Today and future days follow whichever plan is active now. */
+  function dayPlanFor(saved, dateStr, dow){
+    if(saved && saved.plan && dateStr < todayStr()) return normaliseDay(saved.plan);
+    return normaliseDay(activeDays()[dow]);
+  }
+  function allExercises(){
+    var seen = {}, list = [];
+    var ordered = plans.slice().sort(function(a,b){ return (b.id === activePlanId) - (a.id === activePlanId); });
+    var sources = ordered.length ? ordered.map(function(p){ return p.data.days; }) : [DEFAULT_DAYS];
+    sources.forEach(function(days){
+      [1,2,3,4,5,6,0].forEach(function(d){
+        normaliseDay(days[d]).exercises.forEach(function(ex){
+          if(ex.key && !seen[ex.key]){ seen[ex.key] = true; list.push({ key:ex.key, name: ex.name || "Untitled exercise" }); }
+        });
+      });
+    });
+    return list;
+  }
+
+  function defaultLog(dateStr, dow, p){
     var exercises = {};
     p.exercises.forEach(function(ex){
       var sets = [];
-      for(var i=0;i<ex.sets;i++){ sets.push({weight:"", reps:"", done:false}); }
+      var n = Math.max(1, parseInt(ex.sets, 10) || 1);
+      for(var i=0;i<n;i++){ sets.push({weight:"", reps:"", done:false}); }
       exercises[ex.key] = { sets: sets };
     });
     var cardio = {};
@@ -1115,8 +1394,8 @@
     return { date: dateStr, day: dow, exercises: exercises, cardio: cardio, updatedAt: Date.now() };
   }
 
-  function mergeLog(saved, dateStr, dow){
-    var base = defaultLog(dateStr, dow);
+  function mergeLog(saved, dateStr, dow, dayPlan){
+    var base = defaultLog(dateStr, dow, dayPlan);
     if(!saved) return base;
     Object.keys(base.exercises).forEach(function(k){
       var savedEx = saved.exercises && saved.exercises[k];
@@ -1145,9 +1424,10 @@
     currentDate = dateStr;
     currentDow = dowFromDateStr(dateStr);
     var saved = await store.getDoc(dateStr);
-    currentLog = mergeLog(saved, dateStr, currentDow);
+    currentDayPlan = dayPlanFor(saved, dateStr, currentDow);
+    currentLog = mergeLog(saved, dateStr, currentDow, currentDayPlan);
     collapsed = {};
-    PLAN[currentDow].exercises.forEach(function(ex){
+    currentDayPlan.exercises.forEach(function(ex){
       var sets = currentLog.exercises[ex.key].sets;
       if(sets.length && sets.every(function(x){ return x.done; })) collapsed[ex.key] = true;
     });
@@ -1161,6 +1441,9 @@
       currentLog.updatedAt = Date.now();
       currentLog.date = currentDate;
       currentLog.day = currentDow;
+      currentLog.plan = clone(currentDayPlan);
+      var ap = activePlan();
+      if(ap && currentDate >= todayStr()) currentLog.planId = ap.id;
       store.setDoc(currentDate, currentLog);
     }, 500);
   }
@@ -1172,7 +1455,8 @@
 
   function renderHeader(){
     weekdayLabel.textContent = WEEKDAY_NAMES[currentDow] + ", " + formatShort(currentDate);
-    planTitleLabel.textContent = PLAN[currentDow].title;
+    var hasContent = currentDayPlan.exercises.length || currentDayPlan.cardio.length;
+    planTitleLabel.textContent = currentDayPlan.title || (hasContent ? "Workout" : "Rest");
     dateInput.value = currentDate;
     var dd = document.getElementById("date-display");
     if(dd){
@@ -1202,9 +1486,14 @@
   var tabButtons = document.querySelectorAll("nav.tabs button");
   tabButtons.forEach(function(btn){
     btn.addEventListener("click", function(){
-      activeTab = btn.getAttribute("data-tab");
+      var next = btn.getAttribute("data-tab");
+      if(activeTab === "plans" && next !== "plans") closePlanEditor();
+      activeTab = next;
       tabButtons.forEach(function(b){ b.classList.toggle("active", b===btn); });
-      render();
+      document.getElementById("app-header").style.display = activeTab === "plans" ? "none" : "";
+      content.scrollTop = 0;
+      if(activeTab === "today") loadDate(currentDate);
+      else render();
     });
   });
 
@@ -1219,12 +1508,12 @@
 
   function render(){
     if(activeTab === "today") renderToday();
-    else renderProgress();
+    else if(activeTab === "progress") renderProgress();
+    else renderPlans();
   }
 
   function renderToday(){
-    var dow = currentDow;
-    var plan = PLAN[dow];
+    var plan = currentDayPlan;
     if(plan.exercises.length === 0 && plan.cardio.length === 0){
       content.innerHTML = '<div class="tab-panel rest-day"><div class="big">Rest day</div>Full recovery — nothing logged here today.</div>';
       return;
@@ -1240,7 +1529,7 @@
         var isCollapsed = !!collapsed[ex.key];
         html += '<div class="card ex-card' + (ex.optional ? ' optional' : '') + (isCollapsed ? ' collapsed' : '') + '" data-ex-card="' + ex.key + '">';
         html += '<div class="card-head" role="button" tabindex="0" aria-expanded="' + (!isCollapsed) + '" data-toggle-ex="' + ex.key + '">';
-        html += '<div class="head-text"><span class="name">' + esc(ex.name) + (ex.optional ? '<span class="optional-tag">Optional</span>' : '') + '</span>';
+        html += '<div class="head-text"><span class="name">' + esc(ex.name || "Untitled exercise") + (ex.optional ? '<span class="optional-tag">Optional</span>' : '') + '</span>';
         html += '<span class="meta">' + ex.sets + ' x ' + esc(ex.reps) + ' &middot; rest ' + formatRestShort(ex.rest) + '</span></div>';
         html += '<span class="progress-chip' + (doneCount === log.sets.length ? ' complete' : '') + '">' + doneCount + '/' + log.sets.length + '</span>';
         html += '<span class="chevron" aria-hidden="true">&#9662;</span>';
@@ -1292,7 +1581,7 @@
       if(head) head.setAttribute("aria-expanded", String(!value));
     }
     var allBtn = content.querySelector("[data-toggle-all]");
-    if(allBtn) allBtn.textContent = allCollapsed(PLAN[currentDow]) ? "Expand all" : "Collapse all";
+    if(allBtn) allBtn.textContent = allCollapsed(currentDayPlan) ? "Expand all" : "Collapse all";
   }
 
   function formatRestShort(sec){
@@ -1345,7 +1634,7 @@
     }
     var toggleAll = e.target.closest("[data-toggle-all]");
     if(toggleAll){
-      var plan = PLAN[currentDow];
+      var plan = currentDayPlan;
       var target = !allCollapsed(plan);
       plan.exercises.forEach(function(ex){ setCollapsed(ex.key, target); });
       return;
@@ -1368,21 +1657,19 @@
 
   /* ---------------- Progress tab ---------------- */
   function renderProgress(){
-    var options = ALL_EXERCISES.map(function(ex){
+    var exList = allExercises();
+    if(!exList.some(function(x){ return x.key === selectedProgressKey; })){
+      selectedProgressKey = exList.length ? exList[0].key : null;
+    }
+    var options = exList.map(function(ex){
       return '<option value="' + ex.key + '"' + (ex.key===selectedProgressKey ? ' selected' : '') + '>' + esc(ex.name) + '</option>';
     }).join("");
     var html = '<div class="tab-panel">';
     html += '<div class="select-wrap"><select id="exercise-select">' + options + '</select></div>';
     html += '<div class="chart-card" id="chart-card"><div class="chart-empty">Loading…</div></div>';
     html += '<div id="history-list"></div>';
-    html += '<div class="signout-row"><button class="text-btn" id="signout-btn">Sign out</button></div>';
     html += '</div>';
     content.innerHTML = html;
-
-    document.getElementById("signout-btn").addEventListener("click", async function(){
-      try{ localStorage.removeItem(PENDING_KEY); }catch(e){}
-      if(sb) await sb.auth.signOut();
-    });
 
     document.getElementById("exercise-select").addEventListener("change", function(e){
       selectedProgressKey = e.target.value;
@@ -1390,6 +1677,13 @@
     });
 
     loadProgressData();
+  }
+
+  async function signOut(){
+      try{
+        [PENDING_KEY, PLAN_QUEUE_KEY, SETTINGS_PENDING_KEY, PLANS_CACHE_KEY, SETTINGS_CACHE_KEY].forEach(function(k){ localStorage.removeItem(k); });
+      }catch(e){}
+      if(sb) await sb.auth.signOut();
   }
 
   async function loadProgressData(){
@@ -1448,6 +1742,326 @@
       return '<div class="history-row"><span class="hdate">' + formatShort(p.date) + '</span><span class="hval">' + p.weight + ' kg &times; ' + esc(p.reps || "?") + '</span></div>';
     }).join("") + '</div>';
   }
+
+  /* ---------------- Plans tab ---------------- */
+  var DAY_ORDER = [1,2,3,4,5,6,0];
+  var DAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  var REST_OPTIONS = [30,45,60,75,90,120,150,180,240,300];
+  var editingPlanId = null;
+  var editingDay = 1;
+  var planSaveTimer = null;
+
+  function uuid(){
+    if(window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(c){
+      var r = Math.random()*16|0; return (c === "x" ? r : (r&0x3|0x8)).toString(16);
+    });
+  }
+  function slugify(str){
+    return String(str || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "exercise";
+  }
+  function uniqueKey(day, base, self){
+    var taken = {};
+    day.exercises.concat(day.cardio).forEach(function(x){ if(x !== self) taken[x.key] = true; });
+    var k = base, n = 2;
+    while(taken[k]){ k = base + "-" + n; n++; }
+    return k;
+  }
+  function blankDays(){
+    var d = {};
+    for(var i=0;i<7;i++) d[i] = emptyDay();
+    return d;
+  }
+  function planById(id){ return plans.find(function(p){ return p.id === id; }); }
+  function editingPlan(){ return planById(editingPlanId); }
+  function editingDayData(){
+    var p = editingPlan();
+    if(!p) return null;
+    p.data.days[editingDay] = normaliseDay(p.data.days[editingDay]);
+    return p.data.days[editingDay];
+  }
+  function dayHasContent(day){
+    day = normaliseDay(day);
+    return day.exercises.length > 0 || day.cardio.length > 0;
+  }
+  function planSummary(p){
+    var trainingDays = 0, exCount = 0;
+    DAY_ORDER.forEach(function(d){
+      var day = normaliseDay(p.data.days[d]);
+      if(dayHasContent(day)) trainingDays++;
+      exCount += day.exercises.length;
+    });
+    return trainingDays + (trainingDays === 1 ? " training day" : " training days") + " · " + exCount + (exCount === 1 ? " exercise" : " exercises");
+  }
+
+  function schedulePlanSave(){
+    clearTimeout(planSaveTimer);
+    planSaveTimer = setTimeout(flushPlanSave, 600);
+  }
+  function flushPlanSave(){
+    clearTimeout(planSaveTimer);
+    planSaveTimer = null;
+    var p = editingPlan();
+    if(p) store.savePlan(p);
+  }
+  /* New exercises take their history key from their name while the editor is open.
+     Once you leave, the key is fixed so renaming later keeps your progress history. */
+  function closePlanEditor(){
+    var p = editingPlan();
+    if(p){
+      DAY_ORDER.forEach(function(d){
+        var day = normaliseDay(p.data.days[d]);
+        day.exercises.concat(day.cardio).forEach(function(x){ delete x.autoKey; });
+      });
+      flushPlanSave();
+    }
+    editingPlanId = null;
+  }
+
+  function renderPlans(){
+    if(editingPlanId && editingPlan()) renderPlanEditor();
+    else { editingPlanId = null; renderPlanList(); }
+  }
+
+  function renderPlanList(){
+    var html = '<div class="tab-panel plans-panel">';
+    html += '<div class="plans-head"><h2>Plans</h2><button class="pill-btn accent" data-plan-new>+ New plan</button></div>';
+    html += '<p class="plans-hint">The active plan drives your Today screen. Past workouts keep the plan they were done with.</p>';
+    plans.forEach(function(p){
+      var isActive = p.id === activePlanId;
+      html += '<div class="card plan-card' + (isActive ? ' active' : '') + '">';
+      html += '<div class="plan-card-top"><div class="plan-card-name">' + esc(p.name || "Untitled plan") + '</div>';
+      if(isActive) html += '<span class="active-badge">Active</span>';
+      html += '</div>';
+      html += '<div class="plan-card-sub">' + planSummary(p) + '</div>';
+      html += '<div class="week-dots">';
+      DAY_ORDER.forEach(function(d){
+        html += '<span class="week-dot' + (dayHasContent(p.data.days[d]) ? ' on' : '') + '">' + DAY_SHORT[d].charAt(0) + '</span>';
+      });
+      html += '</div>';
+      html += '<div class="plan-actions">';
+      html += '<button class="pill-btn" data-plan-edit="' + p.id + '">Edit</button>';
+      html += '<button class="pill-btn" data-plan-dup="' + p.id + '">Duplicate</button>';
+      if(!isActive) html += '<button class="pill-btn accent" data-plan-use="' + p.id + '">Use plan</button>';
+      html += '</div></div>';
+    });
+    html += '<div class="signout-row"><button class="text-btn" data-signout>Sign out</button></div>';
+    html += '</div>';
+    content.innerHTML = html;
+  }
+
+  function restOptionsHtml(current){
+    var opts = REST_OPTIONS.slice();
+    if(current && opts.indexOf(current) === -1){ opts.push(current); opts.sort(function(a,b){ return a-b; }); }
+    return opts.map(function(v){
+      return '<option value="' + v + '"' + (v === current ? ' selected' : '') + '>' + formatRestShort(v) + '</option>';
+    }).join("");
+  }
+
+  function moveBtns(kind, i, len){
+    return '<button class="mini-btn" aria-label="Move up" data-move="' + kind + '" data-i="' + i + '" data-dir="-1"' + (i === 0 ? ' disabled' : '') + '>&#8593;</button>' +
+           '<button class="mini-btn" aria-label="Move down" data-move="' + kind + '" data-i="' + i + '" data-dir="1"' + (i === len-1 ? ' disabled' : '') + '>&#8595;</button>' +
+           '<button class="mini-btn danger" aria-label="Remove" data-remove="' + kind + '" data-i="' + i + '">Remove</button>';
+  }
+
+  function renderPlanEditor(){
+    var p = editingPlan();
+    var day = editingDayData();
+    var isActive = p.id === activePlanId;
+    var html = '<div class="tab-panel plan-editor">';
+    html += '<div class="editor-top">';
+    html += '<button class="icon-btn" data-plan-back aria-label="Back to plans">&#8249;</button>';
+    html += '<input class="plan-name-input" data-plan-name value="' + esc(p.name) + '" placeholder="Plan name" aria-label="Plan name" />';
+    html += '</div>';
+    html += '<div class="editor-status">' + (isActive
+      ? '<span class="active-badge">Active</span><span class="editor-status-text">Changes show on Today straight away.</span>'
+      : '<button class="pill-btn accent" data-plan-use="' + p.id + '">Use this plan</button>') + '</div>';
+
+    html += '<div class="day-chips" role="tablist">';
+    DAY_ORDER.forEach(function(d){
+      html += '<button role="tab" class="day-chip' + (d === editingDay ? ' active' : '') + (dayHasContent(p.data.days[d]) ? ' has' : '') + '" data-edit-day="' + d + '" aria-selected="' + (d === editingDay) + '">' + DAY_SHORT[d] + '</button>';
+    });
+    html += '</div>';
+
+    html += '<label class="field-label" for="day-title-input">' + WEEKDAY_NAMES[editingDay] + ' name</label>';
+    html += '<input id="day-title-input" class="text-input" data-day-title value="' + esc(day.title) + '" placeholder="e.g. Push, Legs, Rest" />';
+
+    html += '<div class="section-label">Strength</div>';
+    if(!day.exercises.length) html += '<div class="empty-note">No exercises on this day.</div>';
+    day.exercises.forEach(function(ex, i){
+      var rest = parseInt(ex.rest, 10) || 60;
+      var sets = Math.max(1, parseInt(ex.sets, 10) || 1);
+      html += '<div class="card edit-card">';
+      html += '<input class="text-input name-input" data-ex-field="name" data-i="' + i + '" value="' + esc(ex.name) + '" placeholder="Exercise name" />';
+      html += '<div class="edit-grid">';
+      html += '<div class="edit-field"><span class="field-label">Sets</span><div class="stepper">' +
+              '<button class="mini-btn" data-sets="' + i + '" data-dir="-1" aria-label="Fewer sets"' + (sets <= 1 ? ' disabled' : '') + '>&minus;</button>' +
+              '<span class="stepper-val">' + sets + '</span>' +
+              '<button class="mini-btn" data-sets="' + i + '" data-dir="1" aria-label="More sets"' + (sets >= 10 ? ' disabled' : '') + '>+</button></div></div>';
+      html += '<div class="edit-field"><span class="field-label">Reps</span><input class="text-input" data-ex-field="reps" data-i="' + i + '" value="' + esc(ex.reps || "") + '" placeholder="8-10" /></div>';
+      html += '<div class="edit-field"><span class="field-label">Rest</span><select class="text-input" data-ex-rest="' + i + '">' + restOptionsHtml(rest) + '</select></div>';
+      html += '</div>';
+      html += '<div class="edit-actions">' + moveBtns("ex", i, day.exercises.length) + '</div>';
+      html += '</div>';
+    });
+    html += '<button class="add-btn" data-add="ex">+ Add exercise</button>';
+
+    html += '<div class="section-label">Cardio &amp; other</div>';
+    if(!day.cardio.length) html += '<div class="empty-note">No cardio or activities on this day.</div>';
+    day.cardio.forEach(function(c, i){
+      html += '<div class="card edit-card">';
+      html += '<input class="text-input name-input" data-c-field="name" data-i="' + i + '" value="' + esc(c.name) + '" placeholder="e.g. Easy Run, Padel" />';
+      html += '<div class="edit-grid two">';
+      html += '<div class="edit-field"><span class="field-label">Track</span><select class="text-input" data-c-kind="' + i + '">' +
+              [["distance","Distance (km)"],["duration","Time (min)"],["done","Just tick done"]].map(function(o){
+                return '<option value="' + o[0] + '"' + (c.kind === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+              }).join("") + '</select></div>';
+      html += '<div class="edit-field"><span class="field-label">Target</span><input class="text-input" data-c-field="target" data-i="' + i + '" value="' + esc(c.target || "") + '" placeholder="e.g. 3–4 km" /></div>';
+      html += '</div>';
+      html += '<div class="edit-actions">' + moveBtns("c", i, day.cardio.length) + '</div>';
+      html += '</div>';
+    });
+    html += '<button class="add-btn" data-add="c">+ Add cardio or activity</button>';
+
+    if(!dayHasContent(day)) html += '<p class="plans-hint center">Empty days show as a rest day.</p>';
+
+    html += '<div class="danger-zone">';
+    if(isActive){
+      html += '<p class="plans-hint center">To delete this plan, make another plan active first.</p>';
+    } else {
+      html += '<button class="pill-btn danger" data-plan-delete="' + p.id + '">Delete plan</button>';
+    }
+    html += '</div>';
+    html += '</div>';
+    content.innerHTML = html;
+  }
+
+  function openPlan(id){
+    editingPlanId = id;
+    editingDay = currentDow;
+    content.scrollTop = 0;
+    renderPlans();
+  }
+
+  async function useplan(id){
+    flushPlanSave();
+    activePlanId = id;
+    await store.setActivePlan(id);
+    renderPlans();
+  }
+
+  function addPlan(name, days){
+    var p = { id: uuid(), name: name, data: { days: days }, updatedAt: Date.now() };
+    plans.push(p);
+    store.savePlan(p);
+    return p;
+  }
+
+  content.addEventListener("input", function(e){
+    if(activeTab !== "plans" || !editingPlanId) return;
+    var t = e.target, p = editingPlan(), day = editingDayData();
+    if(!p) return;
+    if(t.matches("[data-plan-name]")){ p.name = t.value; schedulePlanSave(); return; }
+    if(t.matches("[data-day-title]")){ day.title = t.value; schedulePlanSave(); return; }
+    if(t.matches("[data-ex-field]")){
+      var ex = day.exercises[+t.dataset.i];
+      ex[t.dataset.exField] = t.value;
+      if(t.dataset.exField === "name" && ex.autoKey) ex.key = uniqueKey(day, slugify(t.value), ex);
+      schedulePlanSave(); return;
+    }
+    if(t.matches("[data-c-field]")){
+      var c = day.cardio[+t.dataset.i];
+      c[t.dataset.cField] = t.value;
+      if(t.dataset.cField === "name" && c.autoKey) c.key = uniqueKey(day, slugify(t.value), c);
+      schedulePlanSave(); return;
+    }
+  });
+
+  content.addEventListener("change", function(e){
+    if(activeTab !== "plans" || !editingPlanId) return;
+    var t = e.target, day = editingDayData();
+    if(t.matches("[data-ex-rest]")){ day.exercises[+t.dataset.exRest].rest = parseInt(t.value, 10); schedulePlanSave(); return; }
+    if(t.matches("[data-c-kind]")){ day.cardio[+t.dataset.cKind].kind = t.value; schedulePlanSave(); return; }
+  });
+
+  content.addEventListener("click", async function(e){
+    if(activeTab !== "plans") return;
+    var t;
+    if((t = e.target.closest("[data-signout]"))){ signOut(); return; }
+    if((t = e.target.closest("[data-plan-new]"))){
+      var np = addPlan("New plan", blankDays());
+      openPlan(np.id);
+      setTimeout(function(){ var el = content.querySelector("[data-plan-name]"); if(el){ el.focus(); el.select(); } }, 50);
+      return;
+    }
+    if((t = e.target.closest("[data-plan-edit]"))){ openPlan(t.dataset.planEdit); return; }
+    if((t = e.target.closest("[data-plan-dup]"))){
+      var src = planById(t.dataset.planDup);
+      if(src){ addPlan((src.name || "Untitled plan") + " copy", clone(src.data.days)); renderPlans(); }
+      return;
+    }
+    if((t = e.target.closest("[data-plan-use]"))){ useplan(t.dataset.planUse); return; }
+    if((t = e.target.closest("[data-plan-back]"))){ closePlanEditor(); content.scrollTop = 0; renderPlans(); return; }
+    if((t = e.target.closest("[data-plan-delete]"))){
+      var dp = planById(t.dataset.planDelete);
+      if(!dp || dp.id === activePlanId) return;
+      if(!confirm('Delete "' + (dp.name || "Untitled plan") + '"? Workouts you already logged are kept.')) return;
+      clearTimeout(planSaveTimer);
+      plans = plans.filter(function(x){ return x.id !== dp.id; });
+      editingPlanId = null;
+      await store.deletePlan(dp.id);
+      renderPlans();
+      return;
+    }
+    if(!editingPlanId) return;
+    var day = editingDayData();
+    if((t = e.target.closest("[data-edit-day]"))){
+      flushPlanSave();
+      editingDay = +t.dataset.editDay;
+      renderPlans();
+      return;
+    }
+    if((t = e.target.closest("[data-add]"))){
+      if(t.dataset.add === "ex"){
+        var ex = { key:"", name:"", sets:4, reps:"8-10", rest:90, autoKey:true };
+        ex.key = uniqueKey(day, "exercise", ex);
+        day.exercises.push(ex);
+      } else {
+        var c = { key:"", name:"", kind:"distance", target:"", autoKey:true };
+        c.key = uniqueKey(day, "activity", c);
+        day.cardio.push(c);
+      }
+      schedulePlanSave();
+      renderPlans();
+      var names = content.querySelectorAll(t.dataset.add === "ex" ? "[data-ex-field=name]" : "[data-c-field=name]");
+      var last = names[names.length-1];
+      if(last){ last.focus(); last.scrollIntoView({ block:"center", behavior:"smooth" }); }
+      return;
+    }
+    if((t = e.target.closest("[data-sets]"))){
+      var sx = day.exercises[+t.dataset.sets];
+      sx.sets = Math.min(10, Math.max(1, (parseInt(sx.sets, 10) || 1) + (+t.dataset.dir)));
+      schedulePlanSave();
+      renderPlans();
+      return;
+    }
+    if((t = e.target.closest("[data-move]"))){
+      var list = t.dataset.move === "ex" ? day.exercises : day.cardio;
+      var i = +t.dataset.i, j = i + (+t.dataset.dir);
+      if(j < 0 || j >= list.length) return;
+      var tmp = list[i]; list[i] = list[j]; list[j] = tmp;
+      schedulePlanSave();
+      renderPlans();
+      return;
+    }
+    if((t = e.target.closest("[data-remove]"))){
+      var rl = t.dataset.remove === "ex" ? day.exercises : day.cardio;
+      rl.splice(+t.dataset.i, 1);
+      schedulePlanSave();
+      renderPlans();
+      return;
+    }
+  });
 
   /* ---------------- Rest timer ---------------- */
   var restBar = document.getElementById("rest-bar");
@@ -1644,6 +2258,20 @@
       return;
     }
     updateSyncDot();
+    var loaded = await store.loadPlans();
+    plans = loaded.plans;
+    var settings = await store.getSettings();
+    activePlanId = settings.activePlanId;
+    if(!plans.length && loaded.fromRemote){
+      /* First run: turn the built-in programme into your first plan profile. */
+      var first = { id: uuid(), name: "Main plan", data: { days: clone(DEFAULT_DAYS) }, updatedAt: Date.now() };
+      plans.push(first);
+      await store.savePlan(first);
+    }
+    if(plans.length && !planById(activePlanId)){
+      activePlanId = plans[0].id;
+      await store.setActivePlan(activePlanId);
+    }
     await loadDate(todayStr());
   }
   boot();

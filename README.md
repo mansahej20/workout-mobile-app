@@ -6,7 +6,7 @@ Static site on Vercel, data in Supabase, installable on your phone's home screen
 ## 1. Supabase
 
 1. Create a project at supabase.com.
-2. **SQL Editor → New query**, paste everything from `supabase/schema.sql`, run it.
+2. **SQL Editor → New query**, paste everything from `supabase/schema.sql`, run it. (It includes the plans tables.)
 3. **Authentication → Users → Add user → Create new user**. Enter your email and a password, tick **Auto Confirm User**.
 4. **Authentication → Sign In / Providers**: turn **off** "Allow new users to sign up". Only the account you just created can log in.
 5. **Project Settings → API**: copy the **Project URL** and the **anon public** key. You'll need both for Vercel.
@@ -56,6 +56,13 @@ It then opens full screen like a normal app.
 SUPABASE_URL=... SUPABASE_ANON_KEY=... npm run dev
 ```
 
-## Editing the plan
+## Plans
 
-The weekly program lives in `public/index.html`, in the `PLAN` object near the top of the script. Each exercise has a `key` (keep it stable, it's how history is matched), `name`, `sets`, `reps` and `rest` in seconds.
+Workout plans live in the **Plans** tab. You can keep several plan profiles, edit any of them day by day, duplicate one as a starting point, and switch which one is active.
+
+- The active plan drives the Today screen.
+- Past workouts keep a snapshot of the plan they were done with, so switching or editing plans never changes your history.
+- Progress charts match exercises by an internal key, so the same exercise shares history across plans (duplicated plans keep the keys). Renaming an exercise later keeps its history.
+- The built-in programme in `public/index.html` (`DEFAULT_DAYS`) is only used once, to create your first plan.
+
+Plans are stored in the `workout_plans` table, and the active plan in `user_settings`. If you set up Supabase before plans existed, run `supabase/002_plans.sql` once in the SQL Editor.
