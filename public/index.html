@@ -1093,6 +1093,10 @@
   }
   .profile-email{ font-size:16px; font-weight:700; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .profile-panel .sound-card{ margin-top:16px; }
+
+  .name-select{ font-weight:700; margin-bottom:10px; }
+  .name-select:invalid, .name-select option[value=""]{ color:var(--text-dim); }
+  .custom-name{ margin-top:-2px; }
 </style>
 </head>
 <body>
@@ -1981,6 +1985,86 @@
     }).join("") + '</div>';
   }
 
+  /* ---------------- Exercise library ----------------
+     Five basics per body part. Keys match the ones older plans used,
+     so progress history carries over when you pick from the list. */
+  var EXERCISE_LIBRARY = [
+    { group:"Chest", items:[
+      { key:"bench-press",      name:"Barbell Bench Press",       reps:"6-8",   rest:150 },
+      { key:"incline-db-press", name:"Incline Dumbbell Press",    reps:"8-10",  rest:90 },
+      { key:"push-up",          name:"Push-up",                   reps:"10-15", rest:60 },
+      { key:"cable-fly",        name:"Cable Chest Fly",           reps:"12-15", rest:60 },
+      { key:"chest-dips",       name:"Chest Dips",                reps:"8-12",  rest:90 }
+    ]},
+    { group:"Back", items:[
+      { key:"deadlift",         name:"Deadlift",                  reps:"5-6",   rest:180 },
+      { key:"lat-pulldown",     name:"Lat Pulldown",              reps:"10-12", rest:90 },
+      { key:"seated-row",       name:"Seated Cable Row",          reps:"10-12", rest:90 },
+      { key:"barbell-row",      name:"Barbell Row",               reps:"6-8",   rest:150 },
+      { key:"pull-up",          name:"Pull-up",                   reps:"6-10",  rest:120 }
+    ]},
+    { group:"Shoulders", items:[
+      { key:"ohp",              name:"Overhead Press",            reps:"6-8",   rest:150 },
+      { key:"db-shoulder-press",name:"Dumbbell Shoulder Press",   reps:"8-10",  rest:90 },
+      { key:"lateral-raise",    name:"Lateral Raise",             reps:"12-15", rest:60 },
+      { key:"face-pull",        name:"Face Pull",                 reps:"15",    rest:60 },
+      { key:"rear-delt-fly",    name:"Rear Delt Fly",             reps:"12-15", rest:60 }
+    ]},
+    { group:"Biceps", items:[
+      { key:"barbell-curl",     name:"Barbell Curl",              reps:"8-10",  rest:60 },
+      { key:"db-curl",          name:"Dumbbell Bicep Curl",       reps:"10-12", rest:60 },
+      { key:"hammer-curl",      name:"Hammer Curl",               reps:"10-12", rest:60 },
+      { key:"incline-curl",     name:"Incline Dumbbell Curl",     reps:"10-12", rest:60 },
+      { key:"preacher-curl",    name:"Preacher Curl",             reps:"10-12", rest:60 }
+    ]},
+    { group:"Triceps", items:[
+      { key:"triceps-pushdown", name:"Triceps Pushdown",          reps:"12-15", rest:60 },
+      { key:"ohe-triceps",      name:"Overhead Triceps Extension",reps:"10-12", rest:60 },
+      { key:"close-grip-bench", name:"Close-Grip Bench Press",    reps:"8-10",  rest:90 },
+      { key:"skull-crusher",    name:"Skull Crusher",             reps:"10-12", rest:60 },
+      { key:"triceps-dips",     name:"Triceps Dips",              reps:"8-12",  rest:90 }
+    ]},
+    { group:"Legs", items:[
+      { key:"back-squat",       name:"Barbell Back Squat",        reps:"6-8",   rest:150 },
+      { key:"rdl",              name:"Romanian Deadlift",         reps:"8-10",  rest:120 },
+      { key:"leg-press",        name:"Leg Press",                 reps:"10-12", rest:90 },
+      { key:"walking-lunges",   name:"Walking Lunges",            reps:"10/leg",rest:75 },
+      { key:"leg-curl",         name:"Leg Curl",                  reps:"12-15", rest:60 }
+    ]},
+    { group:"Core", items:[
+      { key:"plank",            name:"Plank",                     reps:"30-60s",rest:45 },
+      { key:"hanging-leg-raise",name:"Hanging Leg Raise",         reps:"10-15", rest:60 },
+      { key:"cable-crunch",     name:"Cable Crunch",              reps:"12-15", rest:45 },
+      { key:"russian-twist",    name:"Russian Twist",             reps:"20",    rest:45 },
+      { key:"ab-wheel",         name:"Ab Wheel Rollout",          reps:"8-12",  rest:60 }
+    ]}
+  ];
+  var LIB_BY_KEY = {}, LIB_BY_NAME = {};
+  EXERCISE_LIBRARY.forEach(function(g){
+    g.items.forEach(function(it){ LIB_BY_KEY[it.key] = it; LIB_BY_NAME[it.name.toLowerCase()] = it; });
+  });
+  function libraryMatch(name){ return LIB_BY_NAME[String(name || "").trim().toLowerCase()] || null; }
+
+  function exercisePickerHtml(ex, i){
+    var match = libraryMatch(ex.name);
+    var custom = !!ex.custom || (!match && !!String(ex.name || "").trim());
+    var h = '<select class="text-input name-select" data-ex-pick="' + i + '" aria-label="Exercise">';
+    h += '<option value=""' + (!match && !custom ? ' selected' : '') + ' disabled>Choose an exercise…</option>';
+    EXERCISE_LIBRARY.forEach(function(g){
+      h += '<optgroup label="' + g.group + '">';
+      g.items.forEach(function(it){
+        h += '<option value="lib:' + it.key + '"' + (!custom && match === it ? ' selected' : '') + '>' + esc(it.name) + '</option>';
+      });
+      h += '</optgroup>';
+    });
+    h += '<optgroup label="Not in the list?"><option value="custom"' + (custom ? ' selected' : '') + '>Type my own exercise…</option></optgroup>';
+    h += '</select>';
+    if(custom){
+      h += '<input class="text-input name-input custom-name" data-ex-field="name" data-i="' + i + '" value="' + esc(ex.name) + '" placeholder="Type the exercise name" />';
+    }
+    return h;
+  }
+
   /* ---------------- Plans tab ---------------- */
   var DAY_ORDER = [1,2,3,4,5,6,0];
   var DAY_SHORT = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -2053,7 +2137,7 @@
     DAY_ORDER.forEach(function(d){
       var day = normaliseDay(plan.data.days[d]);
       plan.data.days[d] = day;
-      day.exercises.concat(day.cardio).forEach(function(x){ delete x.autoKey; });
+      day.exercises.concat(day.cardio).forEach(function(x){ delete x.autoKey; delete x.custom; });
     });
   }
   async function saveDraft(){
@@ -2223,7 +2307,7 @@
       var rest = parseInt(ex.rest, 10) || 60;
       var sets = Math.max(1, parseInt(ex.sets, 10) || 1);
       html += '<div class="card edit-card">';
-      html += '<input class="text-input name-input" data-ex-field="name" data-i="' + i + '" value="' + esc(ex.name) + '" placeholder="Exercise name" />';
+      html += exercisePickerHtml(ex, i);
       html += '<div class="edit-grid">';
       html += '<div class="edit-field"><span class="field-label">Sets</span><div class="stepper">' +
               '<button class="mini-btn" data-sets="' + i + '" data-dir="-1" aria-label="Fewer sets"' + (sets <= 1 ? ' disabled' : '') + '>&minus;</button>' +
@@ -2450,6 +2534,34 @@
     if(activeTab !== "plans" || !editingPlanId) return;
     var t = e.target, day = editingDayData();
     if(t.matches("[data-ex-rest]")){ day.exercises[+t.dataset.exRest].rest = parseInt(t.value, 10); schedulePlanSave(); return; }
+    if(t.matches("[data-ex-pick]")){
+      var idx = +t.dataset.exPick, ex = day.exercises[idx];
+      if(t.value === "custom"){
+        /* A new name you type gets its own history, not the old exercise's. */
+        if(libraryMatch(ex.name)) ex.name = "";
+        ex.custom = true;
+        ex.autoKey = true;
+        ex.key = uniqueKey(day, slugify(ex.name || "exercise"), ex);
+        schedulePlanSave();
+        renderPlans();
+        var inp = content.querySelector('.custom-name[data-i="' + idx + '"]');
+        if(inp) inp.focus();
+        return;
+      }
+      var item = LIB_BY_KEY[t.value.slice(4)];
+      if(!item) return;
+      var wasNew = !String(ex.name || "").trim();
+      if(ex.name !== item.name){
+        ex.name = item.name;
+        ex.key = uniqueKey(day, item.key, ex);
+      }
+      delete ex.custom;
+      delete ex.autoKey;
+      if(wasNew){ ex.reps = item.reps; ex.rest = item.rest; }
+      schedulePlanSave();
+      renderPlans();
+      return;
+    }
     if(t.matches("[data-c-kind]")){ day.cardio[+t.dataset.cKind].kind = t.value; schedulePlanSave(); return; }
   });
 
@@ -2522,7 +2634,7 @@
       }
       schedulePlanSave();
       renderPlans();
-      var names = content.querySelectorAll(t.dataset.add === "ex" ? "[data-ex-field=name]" : "[data-c-field=name]");
+      var names = content.querySelectorAll(t.dataset.add === "ex" ? "[data-ex-pick]" : "[data-c-field=name]");
       var last = names[names.length-1];
       if(last){ last.focus(); last.scrollIntoView({ block:"center", behavior:"smooth" }); }
       return;
