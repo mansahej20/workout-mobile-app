@@ -66,6 +66,43 @@ where email = 'friend@example.com';
 
 They sign in with it and change it under Plans → Account.
 
+## Rest alerts (notifications)
+
+When a rest ends, the server sends a notification. It arrives with the app closed or the phone locked, uses the phone's own alert sound (or vibrates on silent), and doesn't stop your music.
+
+How it works: ticking a set saves "alert me at 12:03:40" in `rest_alarms`. Every 2 seconds a Supabase cron job sends any due alarms to `/api/push` on Vercel, which delivers the notification.
+
+### One-time setup
+
+1. **Keys.** On your computer, in the `setlog` folder:
+   ```bash
+   npx web-push generate-vapid-keys
+   openssl rand -hex 32
+   ```
+   The first gives a Public Key and a Private Key. The second is a random secret.
+2. **Vercel → Settings → Environment Variables**, add:
+   - `VAPID_PUBLIC_KEY` = the Public Key
+   - `VAPID_PRIVATE_KEY` = the Private Key
+   - `VAPID_SUBJECT` = `mailto:you@example.com` (your email)
+   - `PUSH_SECRET` = the random secret
+
+   Then push the code (or redeploy) so the build picks them up.
+3. **Supabase → SQL Editor**: run `supabase/003_rest_alerts.sql`, then run this with your own values:
+   ```sql
+   insert into public.app_config (key, value) values
+     ('push_url', 'https://workout-mobile-app.vercel.app/api/push'),
+     ('push_secret', 'PASTE_THE_SAME_SECRET_HERE')
+   on conflict (key) do update set value = excluded.value;
+   ```
+4. **On the phone**: Safari → Share → **Add to Home Screen**, open Set Log from the Home Screen, sign in, then **Profile → Turn on rest alerts → Allow**. Use **Send test alert** and lock the phone.
+
+iPhone only allows web notifications for apps opened from the Home Screen. Each phone turns alerts on separately.
+
+### If the test alert doesn't arrive
+
+- Supabase → **Integrations → Cron** (or `select * from cron.job_run_details order by start_time desc limit 5;`) shows whether the job runs.
+- `select * from net._http_response order by created desc limit 5;` shows what `/api/push` answered: 401 means the two secrets don't match, 500 means the VAPID keys are missing in Vercel.
+
 ## How data works
 
 - Each day is one row in `workout_logs` (`log_date` + a `data` JSON blob).

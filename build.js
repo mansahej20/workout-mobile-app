@@ -20,7 +20,12 @@ fs.cpSync(src, out, { recursive: true });
 fs.writeFileSync(
   path.join(out, "config.js"),
   "window.SETLOG_CONFIG = " +
-    JSON.stringify({ supabaseUrl: url, supabaseAnonKey: anonKey }) +
+    JSON.stringify({
+      supabaseUrl: url,
+      supabaseAnonKey: anonKey,
+      // Public half of the push key pair; safe to ship to the browser.
+      vapidPublicKey: process.env.VAPID_PUBLIC_KEY || ""
+    }) +
     ";\n"
 );
 

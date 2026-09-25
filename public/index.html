@@ -1097,6 +1097,13 @@
   .name-select{ font-weight:700; margin-bottom:10px; }
   .name-select:invalid, .name-select option[value=""]{ color:var(--text-dim); }
   .custom-name{ margin-top:-2px; }
+
+  .alerts-card{ margin-top:16px; }
+  .alerts-card .sound-help{ min-height:0; }
+  .alerts-card .sound-help b{ color:var(--text); }
+  .alerts-status{ display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; margin:0 0 8px; }
+  .alerts-dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px rgba(30,215,96,0.18); }
+  .profile-panel .alerts-card + .sound-card{ margin-top:12px; }
 </style>
 </head>
 <body>
@@ -1226,6 +1233,7 @@
   /* Every cache key is scoped to the signed-in user, so several people
      can share one phone without seeing each other's workouts. */
   var currentUserEmail = "";
+  var currentUserId = "";
   var cacheNs = "setlog:";
   function useNamespace(uid){
     var ns = "setlog:" + uid + ":";
@@ -1486,6 +1494,7 @@
     });
     useNamespace(session.user.id);
     currentUserEmail = session.user.email || "";
+    currentUserId = session.user.id;
     return supabaseStore(sb, session.user.id);
   }
 
@@ -1916,6 +1925,7 @@
 
   async function signOut(){
     if(hasUnsynced() && !confirm("Some changes haven't synced yet and will be lost if you sign out now. Sign out anyway?")) return;
+    await disablePush();
     clearUserCache();
     if(sb) await sb.auth.signOut();
     location.reload();
@@ -2214,15 +2224,15 @@
 
   var ALARM_LABELS = { loud:"Loud", mix:"Mix with music", off:"Off" };
   var ALARM_HELP = {
-    loud: "Plays even when your phone is on silent, but iPhone stops your music to play it.",
-    mix: "Plays over your music without stopping it. Your phone's silent switch mutes it.",
-    off: "No sound. Android phones still vibrate."
+    loud: "Beeps from the app even on silent, but iPhone stops your music to play it.",
+    mix: "Beeps from the app while it's open. On iPhone this can still interrupt your music.",
+    off: "No sound from the app itself. Use rest alerts above for a sound that doesn't stop your music."
   };
   function timerSoundCardHtml(){
     var mode = alarmMode();
     var h = '<div class="card sound-card">';
-    h += '<span class="field-label">Sound when rest ends</span>';
-    h += '<div class="seg" role="radiogroup" aria-label="Sound when rest ends">';
+    h += '<span class="field-label">In-app sound</span>';
+    h += '<div class="seg" role="radiogroup" aria-label="In-app sound">';
     ALARM_MODES.forEach(function(m){
       h += '<button role="radio" aria-checked="' + (m === mode) + '" class="seg-btn' + (m === mode ? ' on' : '') + '" data-alarm-mode="' + m + '">' + ALARM_LABELS[m] + '</button>';
     });
@@ -2439,6 +2449,7 @@
     html += '<div class="editor-top"><button class="icon-btn" data-close-profile aria-label="Back">&#8249;</button><h2 class="profile-title">Profile</h2></div>';
     html += '<div class="profile-hero">' + avatarHtml("avatar-lg", false) +
             '<div class="profile-email">' + esc(currentUserEmail || "Signed in") + '</div></div>';
+    html += restAlertsCardHtml();
     html += timerSoundCardHtml();
     html += '<div class="card account-card">';
     html += '<span class="field-label">Account</span>';
@@ -2464,6 +2475,36 @@
     if(activeTab !== "profile") return;
     var t;
     if((t = e.target.closest("[data-close-profile]"))){ closeProfile(); return; }
+    if((t = e.target.closest("[data-push-on]"))){
+      var msg = document.getElementById("push-msg");
+      t.disabled = true; t.textContent = "Turning on…";
+      enablePush().then(function(){
+        renderProfile();
+        var m2 = document.getElementById("push-msg");
+        if(m2){ m2.textContent = "Rest alerts are on. Try a test alert."; m2.className = "pw-msg ok"; }
+      }).catch(function(err){
+        t.disabled = false; t.textContent = "Turn on rest alerts";
+        msg.className = "pw-msg err";
+        if(err && err.message === "denied"){ renderProfile(); return; }
+        msg.textContent = err && err.message === "dismissed"
+          ? "Tap Allow when your phone asks, so Set Log can alert you."
+          : "Couldn't turn on alerts. Check your connection and try again.";
+      });
+      return;
+    }
+    if((t = e.target.closest("[data-push-off]"))){
+      disablePush().then(renderProfile);
+      return;
+    }
+    if((t = e.target.closest("[data-push-test]"))){
+      var pm = document.getElementById("push-msg");
+      scheduleRestAlert(Date.now() + 5000, "", "Test alert", "Rest alerts are working.").then(function(res){
+        if(res && res.error){ pm.className = "pw-msg err"; pm.textContent = "Couldn't send a test. Check your connection."; return; }
+        pm.className = "pw-msg ok";
+        pm.textContent = "Lock your phone now. The alert arrives in about 5 seconds.";
+      });
+      return;
+    }
     if((t = e.target.closest("[data-signout]"))){ signOut(); return; }
     if((t = e.target.closest("[data-alarm-mode]"))){
       setAlarmMode(t.dataset.alarmMode);
@@ -2722,8 +2763,8 @@
      which is the one way to be heard with the silent switch on. */
   var ALARM_MODES = ["mix", "loud", "off"];
   function alarmMode(){
-    var m = readJSON(cacheNs + "alarm", "mix");
-    return ALARM_MODES.indexOf(m) === -1 ? "mix" : m;
+    var m = readJSON(cacheNs + "alarm", "off");
+    return ALARM_MODES.indexOf(m) === -1 ? "off" : m;
   }
   function setAlarmMode(m){ writeJSON(cacheNs + "alarm", m); }
 
@@ -2829,12 +2870,136 @@
   }
   function releaseAlarm(){ stopAlarmSound(false); }
 
+  /* ---------------- Rest alerts (push notifications) ----------------
+     When you tick a set, the app tells the server when your rest ends
+     (a row in rest_alarms). The server sends a notification at that moment,
+     so it arrives with the app closed or the phone locked, uses the phone's
+     own alert sound, and doesn't stop your music. */
+  var PUSH_KEY_SUFFIX = "pushEndpoint";
+  function isIOS(){
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  function isStandalone(){
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  }
+  function pushSupport(){
+    var cfg = window.SETLOG_CONFIG || {};
+    if(!cfg.vapidPublicKey) return "not-configured";
+    var capable = ("serviceWorker" in navigator) && ("PushManager" in window) && ("Notification" in window);
+    if(isIOS() && !isStandalone()) return "install";
+    if(!capable) return "unsupported";
+    if(Notification.permission === "denied") return "denied";
+    return "ok";
+  }
+  function pushEndpoint(){ return readJSON(cacheNs + PUSH_KEY_SUFFIX, ""); }
+  function pushEnabled(){
+    return pushSupport() === "ok" && Notification.permission === "granted" && !!pushEndpoint();
+  }
+  function b64ToBytes(b64){
+    var pad = "=".repeat((4 - b64.length % 4) % 4);
+    var raw = atob((b64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    var out = new Uint8Array(raw.length);
+    for(var i=0;i<raw.length;i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+
+  /* Must start from a tap: iOS only shows the permission prompt then. */
+  async function enablePush(){
+    var perm = await Notification.requestPermission();
+    if(perm !== "granted") throw new Error(perm === "denied" ? "denied" : "dismissed");
+    var reg = await navigator.serviceWorker.ready;
+    var sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: b64ToBytes(window.SETLOG_CONFIG.vapidPublicKey)
+      });
+    }
+    var json = sub.toJSON();
+    var res = await sb.from("push_subscriptions").upsert(
+      { endpoint: json.endpoint, user_id: currentUserId, subscription: json },
+      { onConflict: "endpoint" }
+    );
+    if(res.error) throw res.error;
+    writeJSON(cacheNs + PUSH_KEY_SUFFIX, json.endpoint);
+    /* Notifications are the alarm now; in-app sound would stop your music. */
+    setAlarmMode("off");
+  }
+
+  async function disablePush(){
+    var ep = pushEndpoint();
+    try{ localStorage.removeItem(cacheNs + PUSH_KEY_SUFFIX); }catch(e){}
+    if(!ep || !sb) return;
+    try{ await sb.from("push_subscriptions").delete().eq("user_id", currentUserId).eq("endpoint", ep); }catch(e){}
+  }
+
+  var alarmCall = Promise.resolve();
+  function queueAlarmCall(fn){
+    alarmCall = alarmCall.then(fn).catch(function(){});
+    return alarmCall;
+  }
+  function scheduleRestAlert(endAtMs, name, title, body){
+    if(!pushEnabled() || !sb) return Promise.resolve();
+    var ep = pushEndpoint();
+    return queueAlarmCall(function(){
+      return sb.from("rest_alarms").upsert({
+        endpoint: ep,
+        user_id: currentUserId,
+        fire_at: new Date(endAtMs).toISOString(),
+        title: title || "Rest over",
+        body: body || (name ? "Time for your next set of " + name + "." : "Time for your next set.")
+      }, { onConflict: "endpoint" });
+    });
+  }
+  function cancelRestAlert(){
+    if(!pushEnabled() || !sb) return Promise.resolve();
+    var ep = pushEndpoint();
+    return queueAlarmCall(function(){
+      return sb.from("rest_alarms").delete().eq("user_id", currentUserId).eq("endpoint", ep);
+    });
+  }
+  /* Clears a delivered rest notification once you've moved on. */
+  function clearRestNotifications(){
+    if(!("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready.then(function(reg){
+      if(!reg.getNotifications) return;
+      return reg.getNotifications({ tag:"rest-timer" }).then(function(ns){ ns.forEach(function(n){ n.close(); }); });
+    }).catch(function(){});
+  }
+
+  function restAlertsCardHtml(){
+    var st = pushSupport();
+    if(st === "not-configured") return "";
+    var h = '<div class="card sound-card alerts-card">';
+    h += '<span class="field-label">Rest alerts</span>';
+    if(st === "install"){
+      h += '<p class="sound-help">Get a notification with sound when your rest ends, even with your phone locked, without stopping your music.</p>';
+      h += '<p class="sound-help"><b>First add Set Log to your Home Screen:</b> tap Share <span aria-hidden="true">&#x2191;</span> in Safari, choose <b>Add to Home Screen</b>, then open Set Log from your Home Screen and sign in there.</p>';
+    } else if(st === "unsupported"){
+      h += '<p class="sound-help">This browser can\'t show notifications. Try Safari on iPhone (from the Home Screen) or Chrome.</p>';
+    } else if(st === "denied"){
+      h += '<p class="sound-help">Notifications are blocked for Set Log. Turn them on in <b>Settings &rarr; Notifications &rarr; Set Log</b>, then come back here.</p>';
+    } else if(pushEnabled()){
+      h += '<div class="alerts-status"><span class="alerts-dot"></span>On for this phone</div>';
+      h += '<p class="sound-help">Your phone alerts you when a rest ends, locked or not. On silent it vibrates instead.</p>';
+      h += '<div class="plan-actions"><button class="pill-btn accent" data-push-test>Send test alert</button><button class="pill-btn" data-push-off>Turn off</button></div>';
+    } else {
+      h += '<p class="sound-help">Get a notification with sound when your rest ends, even with your phone locked, without stopping your music.</p>';
+      h += '<button class="pill-btn accent" data-push-on>Turn on rest alerts</button>';
+    }
+    h += '<div class="pw-msg" id="push-msg" role="status"></div>';
+    h += '</div>';
+    return h;
+  }
+
   function startRest(seconds, name){
     if(!seconds || seconds <= 0) return;
     unlockAudio();
     restState = { active:true, total:seconds, endAt: Date.now() + seconds*1000, pausedRemaining:0, name:name, finished:false, paused:false };
     restScreenMinimized = false;
     persistTimer();
+    clearRestNotifications();
+    scheduleRestAlert(restState.endAt, name);
     runTicker();
     renderRest();
   }
@@ -2872,6 +3037,8 @@
       restState.paused = true;
     }
     persistTimer();
+    if(restState.paused) cancelRestAlert();
+    else scheduleRestAlert(restState.endAt, restState.name);
     renderRest();
   }
 
@@ -2885,7 +3052,8 @@
     }
     restState.total = Math.max(restState.total, restRemaining());
     persistTimer();
-    if(restRemaining() <= 0){ restState.paused = false; onRestComplete(); return; }
+    if(restRemaining() <= 0){ restState.paused = false; cancelRestAlert(); onRestComplete(); return; }
+    if(!restState.paused) scheduleRestAlert(restState.endAt, restState.name);
     renderRest();
   }
 
@@ -2922,6 +3090,8 @@
 
   function stopRest(){
     releaseAlarm();
+    if(!restState.finished) cancelRestAlert();
+    clearRestNotifications();
     clearInterval(restInterval);
     restState.active = false;
     restScreenMinimized = false;
