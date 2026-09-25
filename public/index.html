@@ -2214,8 +2214,8 @@
 
   var ALARM_LABELS = { loud:"Loud", mix:"Mix with music", off:"Off" };
   var ALARM_HELP = {
-    loud: "Pauses your music while the alarm rings, then your music carries on.",
-    mix: "Plays over your music without stopping it, but stays quiet when your phone is on silent.",
+    loud: "Plays even when your phone is on silent, but iPhone stops your music to play it.",
+    mix: "Plays over your music without stopping it. Your phone's silent switch mutes it.",
     off: "No sound. Android phones still vibrate."
   };
   function timerSoundCardHtml(){
@@ -2467,7 +2467,6 @@
     if((t = e.target.closest("[data-signout]"))){ signOut(); return; }
     if((t = e.target.closest("[data-alarm-mode]"))){
       setAlarmMode(t.dataset.alarmMode);
-      alarmUnlocked = false;
       content.querySelectorAll("[data-alarm-mode]").forEach(function(b){
         var on = b === t;
         b.classList.toggle("on", on);
@@ -2714,128 +2713,121 @@
   }
 
   /* ---------- Alarm sound ----------
-     A plain <audio> element (no Web Audio): on iPhone, a page using Web Audio is
-     forced into a session that the silent switch mutes. The audio session type
-     decides the trade-off:
-       "loud" -> playback: plays even on silent, but pauses other music briefly
-       "mix"  -> transient: plays over music, but the silent switch mutes it
-     The element is unlocked with a silent play when you tick a set, because iOS
-     only allows sound that follows a tap. */
-  var ALARM_MODES = ["loud", "mix", "off"];
+     Played with Web Audio, never an <audio> element. iPhone treats any
+     <audio> element as a music track: it stops other apps' music (even when
+     muted) and leaves a player on the lock screen. Web Audio does neither.
+
+     The page rests in "ambient", which mixes with other apps' audio and never
+     stops your music. Only a ringing alarm in Loud mode switches to "playback",
+     which is the one way to be heard with the silent switch on. */
+  var ALARM_MODES = ["mix", "loud", "off"];
   function alarmMode(){
-    var m = readJSON(cacheNs + "alarm", "loud");
-    return ALARM_MODES.indexOf(m) === -1 ? "loud" : m;
+    var m = readJSON(cacheNs + "alarm", "mix");
+    return ALARM_MODES.indexOf(m) === -1 ? "mix" : m;
   }
   function setAlarmMode(m){ writeJSON(cacheNs + "alarm", m); }
 
-  /* "transient-solo" is the session made for short interruptions such as
-     driving directions: other audio pauses while it plays, then resumes.
-     ("playback" is for music apps: it stopped your music for good and
-     left a player on the lock screen.) */
-  function applyAudioSession(){
-    try{
-      if(navigator.audioSession) navigator.audioSession.type = alarmMode() === "mix" ? "transient" : "transient-solo";
-    }catch(e){}
+  function setSession(type){
+    try{ if(navigator.audioSession) navigator.audioSession.type = type; }catch(e){}
   }
-  /* "ambient" mixes with other apps and never stops your music. It's the
-     resting state, and what the silent unlock uses when you tick a set:
-     only the alarm itself switches to an interrupting mode. */
-  function resetAudioSession(){
-    try{ if(navigator.audioSession) navigator.audioSession.type = "ambient"; }catch(e){}
-  }
+  function resetAudioSession(){ setSession("ambient"); }
   resetAudioSession();
 
-  function makeAlarmUrl(){
-    var rate = 22050;
+  /* Clear any lock-screen player left behind by older versions of the app. */
+  if("mediaSession" in navigator){
+    try{ navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = "none"; }catch(e){}
+  }
+
+  /* Three bright double-tones, about 2 seconds. */
+  function alarmSamples(rate){
     var parts = [];
     function tone(freq, secs){ parts.push({ f:freq, n: Math.round(secs*rate) }); }
     function gap(secs){ parts.push({ f:0, n: Math.round(secs*rate) }); }
     for(var r=0;r<3;r++){ tone(1318.5, 0.14); gap(0.06); tone(1760, 0.2); gap(r < 2 ? 0.32 : 0.05); }
     var total = parts.reduce(function(t,p){ return t + p.n; }, 0);
-    var buf = new ArrayBuffer(44 + total*2);
-    var v = new DataView(buf);
-    function str(o, t){ for(var i=0;i<t.length;i++) v.setUint8(o+i, t.charCodeAt(i)); }
-    str(0,"RIFF"); v.setUint32(4, 36 + total*2, true); str(8,"WAVE");
-    str(12,"fmt "); v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
-    v.setUint32(24,rate,true); v.setUint32(28,rate*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
-    str(36,"data"); v.setUint32(40, total*2, true);
-    var off = 44, fade = Math.round(0.008*rate);
+    var out = new Float32Array(total), off = 0, fade = Math.round(0.008*rate);
     parts.forEach(function(p){
       for(var i=0;i<p.n;i++){
-        var x = 0;
         if(p.f){
-          var t = i / rate, w = 2*Math.PI*p.f*t;
+          var w = 2*Math.PI*p.f*(i/rate);
           var env = Math.min(1, i/fade, (p.n - i)/fade);
           /* a little third harmonic makes it cut through gym noise */
-          x = (Math.sin(w) + 0.3*Math.sin(3*w)) / 1.3 * 0.95 * env;
+          out[off+i] = (Math.sin(w) + 0.3*Math.sin(3*w)) / 1.3 * 0.95 * env;
         }
-        v.setInt16(off, Math.max(-1, Math.min(1, x)) * 32767, true);
-        off += 2;
       }
+      off += p.n;
     });
-    return URL.createObjectURL(new Blob([buf], { type:"audio/wav" }));
+    return out;
   }
 
-  var alarmEl = null, alarmUnlocked = false, alarmUrl = null;
-  function getAlarm(){
-    if(!alarmEl){
-      alarmEl = new Audio();
-      alarmEl.preload = "auto";
-      alarmEl.setAttribute("playsinline", "");
-      alarmEl.addEventListener("ended", releaseAlarm);
+  var audioCtx = null, alarmBuffer = null, alarmSource = null, sessionTimer = null;
+  function getCtx(){
+    if(!audioCtx){
+      var C = window.AudioContext || window.webkitAudioContext;
+      if(!C) return null;
+      audioCtx = new C();
     }
-    return alarmEl;
+    return audioCtx;
   }
-  function loadAlarm(a){
-    if(!alarmUrl) alarmUrl = makeAlarmUrl();
-    if(a.getAttribute("src") !== alarmUrl) a.src = alarmUrl;
-  }
-
-  /* Unload the sound once it's finished. A loaded audio element is what kept
-     the "Set Log" player on the lock screen; with no source there's nothing to show.
-     The element stays unlocked, so it can still ring next time. */
-  function releaseAlarm(){
-    if(alarmEl){
-      try{
-        alarmEl.pause();
-        alarmEl.removeAttribute("src");
-        alarmEl.load();
-      }catch(e){}
+  function getAlarmBuffer(ctx){
+    if(!alarmBuffer){
+      var data = alarmSamples(ctx.sampleRate);
+      alarmBuffer = ctx.createBuffer(1, data.length, ctx.sampleRate);
+      alarmBuffer.getChannelData(0).set(data);
     }
-    if("mediaSession" in navigator){
-      try{ navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = "none"; }catch(e){}
-    }
-    resetAudioSession();
+    return alarmBuffer;
   }
 
-  /* Call from a tap. Plays the alarm silently once so it can sound later. */
+  /* Call from a tap: iOS only lets sound start after one. This stays in
+     "ambient" and plays nothing audible, so your music keeps going. */
   function unlockAudio(){
-    if(alarmUnlocked || alarmMode() === "off") return;
+    if(alarmMode() === "off") return;
     resetAudioSession();
-    var a = getAlarm();
-    loadAlarm(a);
-    a.muted = true;
+    var ctx = getCtx();
+    if(!ctx) return;
     try{
-      var p = a.play();
-      var done = function(){ alarmUnlocked = true; a.muted = false; releaseAlarm(); };
-      if(p && p.then) p.then(done).catch(function(){ a.muted = false; releaseAlarm(); });
-      else done();
-    }catch(e){ a.muted = false; }
+      if(ctx.state !== "running") ctx.resume();
+      var src = ctx.createBufferSource();
+      src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+      src.connect(ctx.destination);
+      src.start(0);
+    }catch(e){}
   }
 
   function playAlarm(force){
-    if(!force && alarmMode() === "off") return;
-    applyAudioSession();
-    var a = getAlarm();
+    var mode = alarmMode();
+    if(!force && mode === "off") return;
+    setSession(mode === "loud" ? "playback" : "ambient");
+    var ctx = getCtx();
+    if(!ctx) return;
+    function go(){
+      stopAlarmSound(true);
+      var src = ctx.createBufferSource();
+      src.buffer = getAlarmBuffer(ctx);
+      src.connect(ctx.destination);
+      src.onended = function(){ if(alarmSource === src){ alarmSource = null; settleSession(); } };
+      src.start(0);
+      alarmSource = src;
+    }
     try{
-      a.pause();
-      loadAlarm(a);
-      a.currentTime = 0;
-      a.muted = false;
-      var p = a.play();
-      if(p && p.catch) p.catch(releaseAlarm);
-    }catch(e){ releaseAlarm(); }
+      if(ctx.state !== "running") ctx.resume().then(go).catch(function(){});
+      else go();
+    }catch(e){}
   }
+
+  /* After a Loud alarm, go back to "ambient" so other apps can take over again. */
+  function settleSession(){
+    clearTimeout(sessionTimer);
+    sessionTimer = setTimeout(resetAudioSession, 150);
+  }
+  function stopAlarmSound(keepSession){
+    if(alarmSource){
+      try{ alarmSource.onended = null; alarmSource.stop(); }catch(e){}
+      alarmSource = null;
+    }
+    if(!keepSession) settleSession();
+  }
+  function releaseAlarm(){ stopAlarmSound(false); }
 
   function startRest(seconds, name){
     if(!seconds || seconds <= 0) return;
