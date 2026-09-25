@@ -1068,6 +1068,31 @@
   .sound-help{ color:var(--text-dim); font-size:13px; line-height:1.45; margin:0 0 12px; min-height:38px; }
   .pill-btn[disabled]{ opacity:0.4; }
   .account-card{ margin-top:12px; }
+
+  .header-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+  .avatar-btn{
+    width:36px; height:36px; flex:0 0 36px;
+    border:none; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    color:#121212; font-size:15px; font-weight:700;
+    background:var(--accent);
+    padding:0;
+    transition:transform 140ms var(--ease-out), box-shadow 140ms var(--ease-out);
+  }
+  .avatar-btn:active{ transform:scale(0.9); }
+  .avatar-btn:focus-visible{ outline:none; box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
+  .plans-head .avatar-btn{ width:40px; height:40px; flex-basis:40px; }
+  .profile-panel{ padding-top:calc(4px + env(safe-area-inset-top,0px)); }
+  .profile-title{ margin:0; font-size:22px; font-weight:700; letter-spacing:-0.3px; }
+  .profile-hero{ display:flex; flex-direction:column; align-items:center; gap:12px; padding:12px 0 8px; }
+  .avatar-lg{
+    width:88px; height:88px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    color:#121212; font-size:38px; font-weight:700;
+    box-shadow:var(--shadow-heavy);
+  }
+  .profile-email{ font-size:16px; font-weight:700; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .profile-panel .sound-card{ margin-top:16px; }
 </style>
 </head>
 <body>
@@ -1102,7 +1127,10 @@
         <span class="weekday" id="weekday-label">—</span>
         <span class="plan-title"><span id="plan-title-label">—</span><span class="sync-dot" id="sync-dot" title="Synced"></span></span>
       </div>
-      <button class="today-btn" id="today-btn">Today</button>
+      <div class="header-actions">
+        <button class="today-btn" id="today-btn">Today</button>
+        <button class="avatar-btn" id="header-avatar" data-open-profile aria-label="Profile and settings"></button>
+      </div>
     </div>
     <div class="date-row">
       <button class="icon-btn" id="prev-day" aria-label="Previous day">&#8249;</button>
@@ -1658,8 +1686,7 @@
         return;
       }
       activeTab = next;
-      tabButtons.forEach(function(b){ b.classList.toggle("active", b===btn); });
-      document.getElementById("app-header").style.display = activeTab === "plans" ? "none" : "";
+      setTabUi(next);
       content.scrollTop = 0;
       if(activeTab === "today") loadDate(currentDate);
       else render();
@@ -1678,6 +1705,7 @@
   function render(){
     if(activeTab === "today") renderToday();
     else if(activeTab === "progress") renderProgress();
+    else if(activeTab === "profile") renderProfile();
     else renderPlans();
   }
 
@@ -2123,7 +2151,7 @@
 
   function renderPlanList(){
     var html = '<div class="tab-panel plans-panel">';
-    html += '<div class="plans-head"><h2>Plans</h2><button class="pill-btn accent" data-plan-new>+ New plan</button></div>';
+    html += '<div class="plans-head"><h2>Plans</h2><div class="header-actions"><button class="pill-btn accent" data-plan-new>+ New plan</button>' + avatarHtml("avatar-btn", true) + '</div></div>';
     html += '<p class="plans-hint">The active plan drives your Today screen. Past workouts keep the plan they were done with.</p>';
     if(!plans.length){
       html += '<div class="card empty-plans"><div class="big">No plans yet</div>Tap <b>+ New plan</b> to set up your week: pick a day, add exercises, then save.</div>';
@@ -2149,20 +2177,6 @@
       if(!isActive) html += '<button class="pill-btn accent" data-plan-use="' + p.id + '">Use plan</button>';
       html += '</div></div>';
     });
-    html += timerSoundCardHtml();
-    html += '<div class="card account-card">';
-    html += '<span class="field-label">Account</span>';
-    html += '<div class="account-email">' + esc(currentUserEmail || "Signed in") + '</div>';
-    html += '<div class="plan-actions"><button class="pill-btn" data-pw-toggle>Change password</button><button class="pill-btn" data-signout>Sign out</button></div>';
-    html += '<form class="pw-form" id="pw-form" hidden>';
-    html += '<label class="field-label" for="pw-new">New password</label>';
-    html += '<input class="text-input" id="pw-new" type="password" autocomplete="new-password" minlength="8" required />';
-    html += '<label class="field-label" for="pw-confirm">Confirm new password</label>';
-    html += '<input class="text-input" id="pw-confirm" type="password" autocomplete="new-password" minlength="8" required />';
-    html += '<button class="pill-btn accent" type="submit" id="pw-save">Save password</button>';
-    html += '<div class="pw-msg" id="pw-msg" role="status"></div>';
-    html += '</form>';
-    html += '</div>';
     html += '</div>';
     content.innerHTML = html;
   }
@@ -2287,6 +2301,108 @@
     renderPlans();
   });
 
+  /* ---------------- Profile ---------------- */
+  var prevTab = "today";
+  var AVATAR_COLOURS = ["#1ed760", "#539df5", "#ffa42b", "#f3727f", "#b49bff", "#4cd3c2"];
+  function avatarLetter(){
+    var ch = (currentUserEmail || "").trim().charAt(0);
+    return ch ? ch.toUpperCase() : "?";
+  }
+  function avatarColour(){
+    var h = 0, e = currentUserEmail || "";
+    for(var i=0;i<e.length;i++) h = (h*31 + e.charCodeAt(i)) >>> 0;
+    return AVATAR_COLOURS[h % AVATAR_COLOURS.length];
+  }
+  function avatarHtml(cls, clickable){
+    var inner = esc(avatarLetter());
+    var style = ' style="background:' + avatarColour() + '"';
+    if(clickable) return '<button class="' + cls + '" data-open-profile aria-label="Profile and settings"' + style + '>' + inner + '</button>';
+    return '<div class="' + cls + '" aria-hidden="true"' + style + '>' + inner + '</div>';
+  }
+  function updateHeaderAvatar(){
+    var el = document.getElementById("header-avatar");
+    if(!el) return;
+    el.textContent = avatarLetter();
+    el.style.background = avatarColour();
+  }
+
+  function setTabUi(tab){
+    tabButtons.forEach(function(b){ b.classList.toggle("active", b.getAttribute("data-tab") === tab); });
+    document.getElementById("app-header").style.display = (tab === "plans" || tab === "profile") ? "none" : "";
+  }
+
+  async function openProfile(){
+    if(activeTab === "profile") return;
+    if(activeTab === "plans" && editingPlanId){
+      if(!(await leaveEditor())) return;
+    }
+    prevTab = activeTab;
+    activeTab = "profile";
+    setTabUi("profile");
+    content.scrollTop = 0;
+    render();
+  }
+  function closeProfile(){
+    activeTab = prevTab || "today";
+    setTabUi(activeTab);
+    content.scrollTop = 0;
+    if(activeTab === "today") loadDate(currentDate);
+    else render();
+  }
+
+  function renderProfile(){
+    var html = '<div class="tab-panel profile-panel">';
+    html += '<div class="editor-top"><button class="icon-btn" data-close-profile aria-label="Back">&#8249;</button><h2 class="profile-title">Profile</h2></div>';
+    html += '<div class="profile-hero">' + avatarHtml("avatar-lg", false) +
+            '<div class="profile-email">' + esc(currentUserEmail || "Signed in") + '</div></div>';
+    html += timerSoundCardHtml();
+    html += '<div class="card account-card">';
+    html += '<span class="field-label">Account</span>';
+    html += '<div class="plan-actions"><button class="pill-btn" data-pw-toggle>Change password</button><button class="pill-btn" data-signout>Sign out</button></div>';
+    html += '<form class="pw-form" id="pw-form" novalidate hidden>';
+    html += '<label class="field-label" for="pw-new">New password</label>';
+    html += '<input class="text-input" id="pw-new" type="password" autocomplete="new-password" minlength="8" required />';
+    html += '<label class="field-label" for="pw-confirm">Confirm new password</label>';
+    html += '<input class="text-input" id="pw-confirm" type="password" autocomplete="new-password" minlength="8" required />';
+    html += '<button class="pill-btn accent" type="submit" id="pw-save">Save password</button>';
+    html += '<div class="pw-msg" id="pw-msg" role="status"></div>';
+    html += '</form>';
+    html += '</div>';
+    html += '</div>';
+    content.innerHTML = html;
+  }
+
+  document.addEventListener("click", function(e){
+    if(e.target.closest("[data-open-profile]")){ openProfile(); }
+  });
+
+  content.addEventListener("click", function(e){
+    if(activeTab !== "profile") return;
+    var t;
+    if((t = e.target.closest("[data-close-profile]"))){ closeProfile(); return; }
+    if((t = e.target.closest("[data-signout]"))){ signOut(); return; }
+    if((t = e.target.closest("[data-alarm-mode]"))){
+      setAlarmMode(t.dataset.alarmMode);
+      alarmUnlocked = false;
+      content.querySelectorAll("[data-alarm-mode]").forEach(function(b){
+        var on = b === t;
+        b.classList.toggle("on", on);
+        b.setAttribute("aria-checked", String(on));
+      });
+      document.getElementById("sound-help").textContent = ALARM_HELP[t.dataset.alarmMode];
+      var tb = content.querySelector("[data-alarm-test]");
+      if(tb) tb.disabled = t.dataset.alarmMode === "off";
+      return;
+    }
+    if((t = e.target.closest("[data-alarm-test]"))){ playAlarm(true); return; }
+    if((t = e.target.closest("[data-pw-toggle]"))){
+      var f = document.getElementById("pw-form");
+      f.hidden = !f.hidden;
+      if(!f.hidden){ document.getElementById("pw-new").focus(); }
+      return;
+    }
+  });
+
   content.addEventListener("submit", async function(e){
     if(e.target.id !== "pw-form") return;
     e.preventDefault();
@@ -2340,27 +2456,6 @@
   content.addEventListener("click", async function(e){
     if(activeTab !== "plans") return;
     var t;
-    if((t = e.target.closest("[data-signout]"))){ signOut(); return; }
-    if((t = e.target.closest("[data-alarm-mode]"))){
-      setAlarmMode(t.dataset.alarmMode);
-      alarmUnlocked = false;
-      content.querySelectorAll("[data-alarm-mode]").forEach(function(b){
-        var on = b === t;
-        b.classList.toggle("on", on);
-        b.setAttribute("aria-checked", String(on));
-      });
-      document.getElementById("sound-help").textContent = ALARM_HELP[t.dataset.alarmMode];
-      var tb = content.querySelector("[data-alarm-test]");
-      if(tb) tb.disabled = t.dataset.alarmMode === "off";
-      return;
-    }
-    if((t = e.target.closest("[data-alarm-test]"))){ playAlarm(true); return; }
-    if((t = e.target.closest("[data-pw-toggle]"))){
-      var f = document.getElementById("pw-form");
-      f.hidden = !f.hidden;
-      if(!f.hidden){ document.getElementById("pw-new").focus(); }
-      return;
-    }
     if((t = e.target.closest("[data-plan-new]"))){
       startEditing({ id: uuid(), name: "New plan", data: { days: blankDays() }, updatedAt: Date.now() }, true);
       editingDay = currentDow;
@@ -2796,6 +2891,7 @@
       return;
     }
     updateSyncDot();
+    updateHeaderAvatar();
     restoreTimer();
     var loaded = await store.loadPlans();
     plans = loaded.plans;
