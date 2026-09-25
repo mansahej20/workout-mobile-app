@@ -1104,6 +1104,14 @@
   .alerts-status{ display:flex; align-items:center; gap:8px; font-size:15px; font-weight:700; margin:0 0 8px; }
   .alerts-dot{ width:8px; height:8px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 4px rgba(30,215,96,0.18); }
   .profile-panel .alerts-card + .sound-card{ margin-top:12px; }
+
+  /* Home Screen app: iOS blurs a band just below the status bar, so the top of
+     each screen starts a little lower to keep text clear of it. */
+  @media (display-mode: standalone){
+    header{ padding-top:calc(30px + env(safe-area-inset-top,0px)); }
+    .plans-panel, .plan-editor, .profile-panel{ padding-top:calc(22px + env(safe-area-inset-top,0px)); }
+    .rs-top{ padding-top:calc(30px + env(safe-area-inset-top,0px)); }
+  }
 </style>
 </head>
 <body>
