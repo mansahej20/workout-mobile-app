@@ -2737,9 +2737,13 @@
       if(navigator.audioSession) navigator.audioSession.type = alarmMode() === "mix" ? "transient" : "transient-solo";
     }catch(e){}
   }
+  /* "ambient" mixes with other apps and never stops your music. It's the
+     resting state, and what the silent unlock uses when you tick a set:
+     only the alarm itself switches to an interrupting mode. */
   function resetAudioSession(){
-    try{ if(navigator.audioSession) navigator.audioSession.type = "auto"; }catch(e){}
+    try{ if(navigator.audioSession) navigator.audioSession.type = "ambient"; }catch(e){}
   }
+  resetAudioSession();
 
   function makeAlarmUrl(){
     var rate = 22050;
@@ -2807,6 +2811,7 @@
   /* Call from a tap. Plays the alarm silently once so it can sound later. */
   function unlockAudio(){
     if(alarmUnlocked || alarmMode() === "off") return;
+    resetAudioSession();
     var a = getAlarm();
     loadAlarm(a);
     a.muted = true;
