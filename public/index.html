@@ -2214,7 +2214,7 @@
 
   var ALARM_LABELS = { loud:"Loud", mix:"Mix with music", off:"Off" };
   var ALARM_HELP = {
-    loud: "Plays even when your phone is on silent. It may pause your music for a moment.",
+    loud: "Pauses your music while the alarm rings, then your music carries on.",
     mix: "Plays over your music without stopping it, but stays quiet when your phone is on silent.",
     off: "No sound. Android phones still vibrate."
   };
@@ -2728,10 +2728,17 @@
   }
   function setAlarmMode(m){ writeJSON(cacheNs + "alarm", m); }
 
+  /* "transient-solo" is the session made for short interruptions such as
+     driving directions: other audio pauses while it plays, then resumes.
+     ("playback" is for music apps: it stopped your music for good and
+     left a player on the lock screen.) */
   function applyAudioSession(){
     try{
-      if(navigator.audioSession) navigator.audioSession.type = alarmMode() === "mix" ? "transient" : "playback";
+      if(navigator.audioSession) navigator.audioSession.type = alarmMode() === "mix" ? "transient" : "transient-solo";
     }catch(e){}
+  }
+  function resetAudioSession(){
+    try{ if(navigator.audioSession) navigator.audioSession.type = "auto"; }catch(e){}
   }
 
   function makeAlarmUrl(){
@@ -2765,25 +2772,48 @@
     return URL.createObjectURL(new Blob([buf], { type:"audio/wav" }));
   }
 
-  var alarmEl = null, alarmUnlocked = false;
+  var alarmEl = null, alarmUnlocked = false, alarmUrl = null;
   function getAlarm(){
     if(!alarmEl){
-      alarmEl = new Audio(makeAlarmUrl());
+      alarmEl = new Audio();
       alarmEl.preload = "auto";
       alarmEl.setAttribute("playsinline", "");
+      alarmEl.addEventListener("ended", releaseAlarm);
     }
     return alarmEl;
+  }
+  function loadAlarm(a){
+    if(!alarmUrl) alarmUrl = makeAlarmUrl();
+    if(a.getAttribute("src") !== alarmUrl) a.src = alarmUrl;
+  }
+
+  /* Unload the sound once it's finished. A loaded audio element is what kept
+     the "Set Log" player on the lock screen; with no source there's nothing to show.
+     The element stays unlocked, so it can still ring next time. */
+  function releaseAlarm(){
+    if(alarmEl){
+      try{
+        alarmEl.pause();
+        alarmEl.removeAttribute("src");
+        alarmEl.load();
+      }catch(e){}
+    }
+    if("mediaSession" in navigator){
+      try{ navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = "none"; }catch(e){}
+    }
+    resetAudioSession();
   }
 
   /* Call from a tap. Plays the alarm silently once so it can sound later. */
   function unlockAudio(){
     if(alarmUnlocked || alarmMode() === "off") return;
     var a = getAlarm();
+    loadAlarm(a);
     a.muted = true;
     try{
       var p = a.play();
-      var done = function(){ a.pause(); a.currentTime = 0; a.muted = false; alarmUnlocked = true; };
-      if(p && p.then) p.then(done).catch(function(){ a.muted = false; });
+      var done = function(){ alarmUnlocked = true; a.muted = false; releaseAlarm(); };
+      if(p && p.then) p.then(done).catch(function(){ a.muted = false; releaseAlarm(); });
       else done();
     }catch(e){ a.muted = false; }
   }
@@ -2794,11 +2824,12 @@
     var a = getAlarm();
     try{
       a.pause();
+      loadAlarm(a);
       a.currentTime = 0;
       a.muted = false;
       var p = a.play();
-      if(p && p.catch) p.catch(function(){});
-    }catch(e){}
+      if(p && p.catch) p.catch(releaseAlarm);
+    }catch(e){ releaseAlarm(); }
   }
 
   function startRest(seconds, name){
@@ -2893,7 +2924,7 @@
   function beep(){ playAlarm(false); }
 
   function stopRest(){
-    if(alarmEl){ try{ alarmEl.pause(); alarmEl.currentTime = 0; }catch(e){} }
+    releaseAlarm();
     clearInterval(restInterval);
     restState.active = false;
     restScreenMinimized = false;
