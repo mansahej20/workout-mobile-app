@@ -1137,6 +1137,13 @@
     box-shadow:var(--shadow-heavy), inset 0 0 0 1px rgba(30,215,96,0.45);
   }
   .ex-card.dragging .drag-handle{ color:var(--accent); cursor:grabbing; }
+
+  .skip-row{ display:flex; justify-content:flex-end; margin-top:4px; }
+  .skip-btn{ color:var(--text-faint); }
+  .skip-btn.undo{ color:var(--accent); }
+  .ex-card.skipped .head-text .name{ color:var(--text-dim); text-decoration:line-through; text-decoration-color:var(--text-faint); }
+  .ex-card.skipped .ex-body-inner .set-row{ opacity:0.45; }
+  .progress-chip.skipped-chip{ background:transparent; color:var(--text-faint); box-shadow:inset 0 0 0 1px var(--border); }
 </style>
 </head>
 <body>
@@ -1664,6 +1671,7 @@
         var anyWeight = savedEx.sets.some(function(x){ return x && x.weight !== "" && x.weight != null; });
         /* Logs from before units existed were always kg. */
         base.exercises[k].unit = savedEx.unit || (anyWeight ? "kg" : base.exercises[k].unit);
+        if(savedEx.skipped) base.exercises[k].skipped = true;
         base.exercises[k].sets.forEach(function(s, i){
           var sv = savedEx.sets[i];
           if(sv){
@@ -1696,7 +1704,7 @@
     collapsed = {};
     currentDayPlan.exercises.forEach(function(ex){
       var sets = currentLog.exercises[ex.key].sets;
-      if(sets.length && sets.every(function(x){ return x.done; })) collapsed[ex.key] = true;
+      if((sets.length && sets.every(function(x){ return x.done; })) || currentLog.exercises[ex.key].skipped) collapsed[ex.key] = true;
     });
     renderHeader();
     render();
@@ -1832,12 +1840,14 @@
         var log = currentLog.exercises[ex.key];
         var doneCount = log.sets.filter(function(x){ return x.done; }).length;
         var isCollapsed = !!collapsed[ex.key];
-        html += '<div class="card ex-card' + (ex.optional ? ' optional' : '') + (isCollapsed ? ' collapsed' : '') + '" data-ex-card="' + ex.key + '">';
+        var skipped = !!log.skipped;
+        html += '<div class="card ex-card' + (ex.optional ? ' optional' : '') + (isCollapsed ? ' collapsed' : '') + (skipped ? ' skipped' : '') + '" data-ex-card="' + ex.key + '">';
         html += '<div class="card-head" role="button" tabindex="0" aria-expanded="' + (!isCollapsed) + '" data-toggle-ex="' + ex.key + '">';
         if(canDrag) html += '<span class="drag-handle" data-drag-handle tabindex="0" role="button" aria-label="Move ' + esc(ex.name || "exercise") + '. Drag, or use the up and down arrow keys.">' + GRIP_ICON + '</span>';
         html += '<div class="head-text"><span class="name">' + esc(ex.name || "Untitled exercise") + (ex.optional ? '<span class="optional-tag">Optional</span>' : '') + '</span>';
         html += '<span class="meta">' + ex.sets + ' x ' + esc(ex.reps) + ' &middot; rest ' + formatRestShort(ex.rest) + '</span></div>';
-        html += '<span class="progress-chip' + (doneCount === log.sets.length ? ' complete' : '') + '">' + doneCount + '/' + log.sets.length + '</span>';
+        if(skipped) html += '<span class="progress-chip skipped-chip">Skipped</span>';
+        else html += '<span class="progress-chip' + (doneCount === log.sets.length ? ' complete' : '') + '">' + doneCount + '/' + log.sets.length + '</span>';
         html += '<span class="chevron" aria-hidden="true">&#9662;</span>';
         html += '</div>';
         html += '<div class="ex-body-wrap"><div class="ex-body"><div class="ex-body-inner">';
@@ -1853,6 +1863,7 @@
           html += '<button class="check-btn' + (s.done ? ' on' : '') + '" data-set-done data-key="' + ex.key + '" data-index="' + i + '" data-rest="' + ex.rest + '" data-name="' + esc(ex.name) + '">&#10003;</button>';
           html += '</div>';
         });
+        html += '<div class="skip-row"><button class="text-btn skip-btn' + (skipped ? ' undo' : '') + '" data-skip-ex="' + ex.key + '">' + (skipped ? 'Unskip exercise' : 'Skip exercise') + '</button></div>';
         html += '</div></div></div>';
         html += '</div>';
       });
@@ -1933,6 +1944,17 @@
   });
 
   content.addEventListener("click", function(e){
+    var skipBtn = e.target.closest("[data-skip-ex]");
+    if(skipBtn && activeTab === "today"){
+      var sk = skipBtn.dataset.skipEx, sl = currentLog.exercises[sk];
+      if(!sl) return;
+      if(sl.skipped){ delete sl.skipped; }
+      else { sl.skipped = true; }
+      scheduleSave();
+      render();
+      if(sl.skipped) setTimeout(function(){ setCollapsed(sk, true); }, 250);
+      return;
+    }
     var unitBtn = e.target.closest("[data-unit-toggle]");
     if(unitBtn){
       e.preventDefault();
