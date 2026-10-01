@@ -1120,33 +1120,23 @@
   html.fit-screen .sheet-backdrop{ bottom:auto; height:var(--app-h); }
 
   .ctrl-btns{ display:flex; align-items:center; gap:12px; }
-  .reorder-hint{ color:var(--text-dim); font-size:13px; line-height:1.45; margin:0 0 12px; }
-  .ro-done{ height:36px; padding:0 16px; }
-  .reorder-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:8px; }
-  .reorder-row{
-    display:flex; align-items:center; gap:8px;
-    background:var(--card); border-radius:var(--radius-m);
-    padding:8px 10px 8px 4px;
-    box-shadow:var(--shadow-med);
-    position:relative;
-  }
-  .reorder-row.dragging{
-    z-index:5;
-    background:var(--surface-2);
-    box-shadow:var(--shadow-heavy), inset 0 0 0 1px rgba(30,215,96,0.45);
-    transition:none;
-  }
-  .reorder-list.is-dragging .reorder-row:not(.dragging){ transition:transform 160ms var(--ease-out); }
-  .drag-handle{
-    flex:0 0 auto; width:40px; height:44px;
+  .ex-list{ position:relative; }
+  .ex-card .card-head .drag-handle{
+    flex:0 0 auto; width:32px; height:44px; margin:-10px -4px -10px -8px;
     display:flex; align-items:center; justify-content:center;
-    color:var(--text-faint);
+    color:var(--text-faint); border-radius:var(--radius-s);
     touch-action:none; cursor:grab;
   }
-  .reorder-row.dragging .drag-handle{ color:var(--accent); cursor:grabbing; }
-  .ro-text{ flex:1; min-width:0; }
-  .ro-name{ font-size:15px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .ro-meta{ font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .ex-card .card-head .drag-handle:focus-visible{ outline:2px solid var(--accent); outline-offset:-2px; }
+  .ex-list.is-dragging .ex-body-wrap{ grid-template-rows:0fr; transition:none; }
+  .ex-list.is-dragging .ex-body-inner{ opacity:0; transition:none; }
+  .ex-list.is-dragging .chevron{ transform:rotate(-90deg); transition:none; }
+  .ex-card.dragging{
+    z-index:5; transition:none !important;
+    background:var(--surface-2);
+    box-shadow:var(--shadow-heavy), inset 0 0 0 1px rgba(30,215,96,0.45);
+  }
+  .ex-card.dragging .drag-handle{ color:var(--accent); cursor:grabbing; }
 </style>
 </head>
 <body>
@@ -1703,7 +1693,6 @@
     var saved = await store.getDoc(dateStr);
     currentDayPlan = dayPlanFor(saved, dateStr, currentDow);
     currentLog = mergeLog(saved, dateStr, currentDow, currentDayPlan);
-    reorderMode = false;
     collapsed = {};
     currentDayPlan.exercises.forEach(function(ex){
       var sets = currentLog.exercises[ex.key].sets;
@@ -1772,7 +1761,6 @@
       activeTab = next;
       setTabUi(next);
       content.scrollTop = 0;
-      reorderMode = false;
       if(activeTab === "today") loadDate(currentDate);
       else render();
     });
@@ -1796,7 +1784,6 @@
 
   /* Today-only exercise order. Stored on the day's log as a list of keys;
      anything not in the list (e.g. added to the plan later) keeps plan order. */
-  var reorderMode = false;
   function orderedExercises(plan){
     var order = (currentLog && currentLog.order) || [];
     if(!order.length) return plan.exercises.slice();
@@ -1821,27 +1808,6 @@
   }
   var GRIP_ICON = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><g fill="currentColor"><circle cx="6.5" cy="4" r="1.5"/><circle cx="11.5" cy="4" r="1.5"/><circle cx="6.5" cy="9" r="1.5"/><circle cx="11.5" cy="9" r="1.5"/><circle cx="6.5" cy="14" r="1.5"/><circle cx="11.5" cy="14" r="1.5"/></g></svg>';
 
-  function reorderListHtml(plan){
-    var list = orderedExercises(plan);
-    var h = '<div class="collapse-controls"><div class="section-label">Reorder today</div><div class="ctrl-btns">';
-    if(isCustomOrder(plan)) h += '<button class="text-btn" data-ro-reset>Reset</button>';
-    h += '<button class="pill-btn accent ro-done" data-ro-done>Done</button></div></div>';
-    h += '<p class="reorder-hint">Drag the handle or use the arrows. This only changes today; your plan stays the same.</p>';
-    h += '<div class="reorder-list" id="reorder-list">';
-    list.forEach(function(ex, i){
-      var log = currentLog.exercises[ex.key];
-      var done = log.sets.filter(function(x){ return x.done; }).length;
-      h += '<div class="reorder-row" data-ro-key="' + ex.key + '">';
-      h += '<span class="drag-handle" data-drag-handle aria-hidden="true">' + GRIP_ICON + '</span>';
-      h += '<div class="ro-text"><div class="ro-name">' + esc(ex.name || "Untitled exercise") + '</div><div class="ro-meta">' + done + '/' + log.sets.length + ' sets done</div></div>';
-      h += '<button class="mini-btn" data-ro-move="' + ex.key + '" data-dir="-1" aria-label="Move ' + esc(ex.name || "exercise") + ' up"' + (i === 0 ? ' disabled' : '') + '>&#8593;</button>';
-      h += '<button class="mini-btn" data-ro-move="' + ex.key + '" data-dir="1" aria-label="Move ' + esc(ex.name || "exercise") + ' down"' + (i === list.length-1 ? ' disabled' : '') + '>&#8595;</button>';
-      h += '</div>';
-    });
-    h += '</div>';
-    return h;
-  }
-
   function renderToday(){
     var plan = currentDayPlan;
     if(!plans.length && plan.exercises.length === 0 && plan.cardio.length === 0){
@@ -1856,18 +1822,19 @@
     }
     var html = '<div class="tab-panel">';
 
-    if(plan.exercises.length && reorderMode){
-      html += reorderListHtml(plan);
-    } else if(plan.exercises.length){
+    var canDrag = plan.exercises.length > 1;
+    if(plan.exercises.length){
       html += '<div class="collapse-controls"><div class="section-label">Strength</div><div class="ctrl-btns">';
-      if(plan.exercises.length > 1) html += '<button class="text-btn" data-ro-start>Reorder</button>';
+      if(isCustomOrder(plan)) html += '<button class="text-btn" data-ro-reset>Reset order</button>';
       html += '<button class="text-btn" data-toggle-all>' + (allCollapsed(plan) ? 'Expand all' : 'Collapse all') + '</button></div></div>';
+      html += '<div class="ex-list" id="ex-list">';
       orderedExercises(plan).forEach(function(ex){
         var log = currentLog.exercises[ex.key];
         var doneCount = log.sets.filter(function(x){ return x.done; }).length;
         var isCollapsed = !!collapsed[ex.key];
         html += '<div class="card ex-card' + (ex.optional ? ' optional' : '') + (isCollapsed ? ' collapsed' : '') + '" data-ex-card="' + ex.key + '">';
         html += '<div class="card-head" role="button" tabindex="0" aria-expanded="' + (!isCollapsed) + '" data-toggle-ex="' + ex.key + '">';
+        if(canDrag) html += '<span class="drag-handle" data-drag-handle tabindex="0" role="button" aria-label="Move ' + esc(ex.name || "exercise") + '. Drag, or use the up and down arrow keys.">' + GRIP_ICON + '</span>';
         html += '<div class="head-text"><span class="name">' + esc(ex.name || "Untitled exercise") + (ex.optional ? '<span class="optional-tag">Optional</span>' : '') + '</span>';
         html += '<span class="meta">' + ex.sets + ' x ' + esc(ex.reps) + ' &middot; rest ' + formatRestShort(ex.rest) + '</span></div>';
         html += '<span class="progress-chip' + (doneCount === log.sets.length ? ' complete' : '') + '">' + doneCount + '/' + log.sets.length + '</span>';
@@ -1889,6 +1856,7 @@
         html += '</div></div></div>';
         html += '</div>';
       });
+      html += '</div>';
     }
 
     if(plan.cardio.length){
@@ -1942,6 +1910,7 @@
   });
 
   content.addEventListener("keydown", function(e){
+    if(e.target.closest && e.target.closest("[data-drag-handle]")) return;
     var head = e.target.closest && e.target.closest("[data-toggle-ex]");
     if(head && (e.key === "Enter" || e.key === " ")){
       e.preventDefault();
@@ -2006,6 +1975,7 @@
       plan.exercises.forEach(function(ex){ setCollapsed(ex.key, target); });
       return;
     }
+    if(e.target.closest && e.target.closest("[data-drag-handle]")) return;
     var head = e.target.closest("[data-toggle-ex]");
     if(head){
       var k = head.getAttribute("data-toggle-ex");
@@ -2508,40 +2478,43 @@
     return p;
   }
 
-  /* ---------- Today: reorder ---------- */
+  /* ---------- Today: reorder by the grip on each exercise ----------
+     Drag the six dots. While dragging, every card folds to its title so the
+     list is short; the order is saved for today only. */
   content.addEventListener("click", function(e){
     if(activeTab !== "today") return;
-    var t;
-    if((t = e.target.closest("[data-ro-start]"))){ reorderMode = true; render(); return; }
-    if((t = e.target.closest("[data-ro-done]"))){ reorderMode = false; render(); return; }
-    if((t = e.target.closest("[data-ro-reset]"))){ delete currentLog.order; scheduleSave(); render(); return; }
-    if((t = e.target.closest("[data-ro-move]"))){
-      var keys = orderedExercises(currentDayPlan).map(function(x){ return x.key; });
-      var i = keys.indexOf(t.dataset.roMove), j = i + (+t.dataset.dir);
-      if(i < 0 || j < 0 || j >= keys.length) return;
-      var tmp = keys[i]; keys[i] = keys[j]; keys[j] = tmp;
-      setTodayOrder(keys);
-      render();
-      var again = content.querySelector('[data-ro-move="' + tmp + '"][data-dir="' + t.dataset.dir + '"]');
-      if(again && !again.disabled) again.focus();
-      return;
-    }
+    if(e.target.closest("[data-ro-reset]")){ delete currentLog.order; scheduleSave(); render(); }
   });
 
-  /* Drag by the handle. The row follows your finger; rows swap as it passes
-     their midpoint. Works with touch and mouse. */
+  function currentKeys(){ return orderedExercises(currentDayPlan).map(function(x){ return x.key; }); }
+
+  content.addEventListener("keydown", function(e){
+    var h = e.target.closest && e.target.closest("[data-drag-handle]");
+    if(!h || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault(); e.stopPropagation();
+    var key = h.closest("[data-ex-card]").dataset.exCard;
+    var keys = currentKeys(), i = keys.indexOf(key), j = i + (e.key === "ArrowUp" ? -1 : 1);
+    if(j < 0 || j >= keys.length) return;
+    keys.splice(j, 0, keys.splice(i, 1)[0]);
+    setTodayOrder(keys);
+    render();
+    var again = content.querySelector('[data-ex-card="' + key + '"] [data-drag-handle]');
+    if(again) again.focus();
+  }, true);
+
   var roDrag = null;
   content.addEventListener("pointerdown", function(e){
     var handle = e.target.closest("[data-drag-handle]");
     if(!handle || activeTab !== "today") return;
-    var row = handle.closest(".reorder-row");
-    var list = document.getElementById("reorder-list");
+    var row = handle.closest(".ex-card");
+    var list = document.getElementById("ex-list");
     if(!row || !list) return;
     e.preventDefault();
     try{ handle.setPointerCapture(e.pointerId); }catch(err){}
-    roDrag = { row:row, list:list, grab: e.clientY - row.getBoundingClientRect().top, id:e.pointerId };
-    row.classList.add("dragging");
     list.classList.add("is-dragging");
+    row.classList.add("dragging");
+    var r = row.getBoundingClientRect();
+    roDrag = { row:row, list:list, id:e.pointerId, grab: Math.min(Math.max(e.clientY - r.top, 0), r.height) };
   });
   content.addEventListener("pointermove", function(e){
     if(!roDrag || e.pointerId !== roDrag.id) return;
@@ -2552,18 +2525,19 @@
     if(prev && top < prev.offsetTop + prev.offsetHeight/2){ list.insertBefore(row, prev); }
     else if(next && top + row.offsetHeight > next.offsetTop + next.offsetHeight/2){ list.insertBefore(next, row); }
     row.style.transform = "translateY(" + (top - row.offsetTop) + "px)";
+    var cr = content.getBoundingClientRect();
+    if(e.clientY < cr.top + 60) content.scrollTop -= 12;
+    else if(e.clientY > cr.bottom - 60) content.scrollTop += 12;
   });
   function endDrag(e){
     if(!roDrag || (e && e.pointerId !== roDrag.id)) return;
-    var list = roDrag.list;
-    roDrag.row.style.transform = "";
-    roDrag.row.classList.remove("dragging");
+    var list = roDrag.list, row = roDrag.row;
+    row.style.transform = "";
+    row.classList.remove("dragging");
     list.classList.remove("is-dragging");
     roDrag = null;
-    var keys = [].map.call(list.querySelectorAll(".reorder-row"), function(r){ return r.dataset.roKey; });
-    var before = orderedExercises(currentDayPlan).map(function(x){ return x.key; }).join("|");
-    if(keys.join("|") !== before) setTodayOrder(keys);
-    render();
+    var keys = [].map.call(list.querySelectorAll("[data-ex-card]"), function(r){ return r.dataset.exCard; });
+    if(keys.join("|") !== currentKeys().join("|")){ setTodayOrder(keys); render(); }
   }
   content.addEventListener("pointerup", endDrag);
   content.addEventListener("pointercancel", endDrag);
