@@ -1144,6 +1144,63 @@
   .ex-card.skipped .head-text .name{ color:var(--text-dim); text-decoration:line-through; text-decoration-color:var(--text-faint); }
   .ex-card.skipped .ex-body-inner .set-row{ opacity:0.45; }
   .progress-chip.skipped-chip{ background:transparent; color:var(--text-faint); box-shadow:inset 0 0 0 1px var(--border); }
+
+  /* ---------- Landscape phones ----------
+     Short screens: one compact header row, a wider column, slimmer tabs,
+     room for the notch on the sides, and a side-by-side rest timer. */
+  @media (orientation: landscape) and (max-height: 520px){
+    #app{
+      max-width:760px;
+      padding-left:env(safe-area-inset-left,0px);
+      padding-right:env(safe-area-inset-right,0px);
+    }
+    header{
+      display:flex; align-items:center; gap:12px;
+      padding:calc(6px + env(safe-area-inset-top,0px)) 12px 6px;
+    }
+    .header-top{ display:contents; }
+    .day-name{ order:1; flex:1 1 auto; }
+    .date-row{ order:2; flex:0 1 330px; min-width:0; }
+    .header-actions{ order:3; }
+    .day-name .weekday{ font-size:15px; }
+    .day-name .plan-title{ font-size:12px; }
+    .icon-btn, .date-input-wrap{ height:36px; }
+    .icon-btn{ width:36px; flex-basis:36px; }
+    #content{ padding-top:10px; }
+    nav.tabs{ padding-top:2px; padding-bottom:calc(2px + env(safe-area-inset-bottom,0px)); }
+    nav.tabs button{ min-height:36px; padding:4px 0; }
+    #rest-bar{ max-width:760px; }
+
+    .plans-panel, .plan-editor, .profile-panel{ padding-top:calc(4px + env(safe-area-inset-top,0px)); }
+
+    #rest-screen{
+      max-width:none;
+      padding-left:env(safe-area-inset-left,0px);
+      padding-right:env(safe-area-inset-right,0px);
+    }
+    .rs-top{ position:absolute; top:0; right:0; padding:10px max(14px, env(safe-area-inset-right,0px)) 0 0; z-index:2; }
+    .rs-body{
+      display:grid;
+      grid-template-columns:auto minmax(220px, 300px);
+      grid-template-areas:"ring label" "ring ex" "ring adjust" "ring skip";
+      grid-template-rows:auto auto auto auto;
+      align-content:center; justify-content:center;
+      column-gap:40px;
+      padding:12px 24px calc(12px + env(safe-area-inset-bottom,0px));
+    }
+    .rs-label{ grid-area:label; align-self:end; }
+    .rs-exercise{ grid-area:ex; margin-bottom:18px; }
+    .rs-ring-wrap{ grid-area:ring; width:min(70vh, 240px); height:min(70vh, 240px); margin:0; align-self:center; }
+    .rs-time{ font-size:44px; }
+    .rs-adjust{ grid-area:adjust; justify-content:center; margin-bottom:16px; }
+    .rs-skip{ grid-area:skip; justify-self:center; }
+  }
+  /* The Home Screen extra top gap is for the portrait status bar; landscape has none. */
+  @media (display-mode: standalone) and (orientation: landscape) and (max-height: 520px){
+    header{ padding-top:calc(6px + env(safe-area-inset-top,0px)); }
+    .plans-panel, .plan-editor, .profile-panel{ padding-top:calc(4px + env(safe-area-inset-top,0px)); }
+    .rs-top{ padding-top:10px; }
+  }
 </style>
 </head>
 <body>
