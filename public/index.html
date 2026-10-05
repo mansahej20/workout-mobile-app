@@ -1205,12 +1205,15 @@
     font-size:24px; font-weight:700; letter-spacing:-0.5px; line-height:1;
     align-self:center;
   }
-  /* Logo: the word with a barbell underneath as its underline. Sized in em so it scales with the text. */
-  .brand{ display:inline-flex; flex-direction:column; align-items:stretch; }
-  .brand-word{ color:var(--text); }
+  /* Logo: a barbell struck through the word. The plates sit just past each end
+     of the word so they never cover a letter. Sized in em so it scales with the text. */
+  .brand{ display:inline-flex; position:relative; padding:0 0.42em; }
+  .brand-word{ color:var(--text); position:relative; }
   .barbell{
+    position:absolute; left:0; right:0; top:60%;
     display:flex; align-items:center; gap:0.04em;
-    height:0.42em; margin-top:0.12em;
+    height:0.46em; transform:translateY(-50%);
+    pointer-events:none;
   }
   .barbell i{ display:block; background:var(--accent); border-radius:0.04em; flex:0 0 auto; }
   .barbell .plate{ width:0.12em; height:0.3em; }
