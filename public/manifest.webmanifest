@@ -1,6 +1,6 @@
 {
-  "name": "Set Log",
-  "short_name": "Set Log",
+  "name": "Repped",
+  "short_name": "Repped",
   "description": "Workout tracker with sets, weights and a rest timer.",
   "start_url": "/",
   "scope": "/",

@@ -1,4 +1,4 @@
-# Set Log
+# Repped
 
 Personal workout tracker: weekly plan, set/weight logging, rest timer, progress charts.
 Static site on Vercel, data in Supabase, installable on your phone's home screen.
@@ -17,9 +17,9 @@ Static site on Vercel, data in Supabase, installable on your phone's home screen
 cd setlog
 git init
 git add .
-git commit -m "Set Log"
+git commit -m "Repped"
 git branch -M main
-git remote add origin https://github.com/<you>/setlog.git
+git remote add origin https://github.com/<you>/workout-mobile-app.git
 git push -u origin main
 ```
 
@@ -94,7 +94,7 @@ How it works: ticking a set saves "alert me at 12:03:40" in `rest_alarms`. Every
      ('push_secret', 'PASTE_THE_SAME_SECRET_HERE')
    on conflict (key) do update set value = excluded.value;
    ```
-4. **On the phone**: Safari → Share → **Add to Home Screen**, open Set Log from the Home Screen, sign in, then **Profile → Turn on rest alerts → Allow**. Use **Send test alert** and lock the phone.
+4. **On the phone**: Safari → Share → **Add to Home Screen**, open Repped from the Home Screen, sign in, then **Profile → Turn on rest alerts → Allow**. Use **Send test alert** and lock the phone.
 
 iPhone only allows web notifications for apps opened from the Home Screen. Each phone turns alerts on separately.
 
