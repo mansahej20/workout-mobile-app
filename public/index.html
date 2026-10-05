@@ -1438,14 +1438,30 @@
      shorter than the screen (by about the status bar's height), leaving an empty
      strip under the tab bar. When that happens, size the app to the real screen.
      A bigger difference means the keyboard is open, so it's left alone. */
+  /* iPhone Home Screen apps can report the screen height wrongly in two ways:
+     the page itself is laid out short, or "100dvh" comes out short by about the
+     status bar's height. Either leaves an empty strip under the tab bar.
+     Measure what 100dvh actually gives and, if it falls short of the real
+     screen, size the app to the real screen instead. */
+  function measureDvh(){
+    var probe = document.createElement("div");
+    probe.style.cssText = "position:fixed;top:0;left:0;width:0;height:100dvh;visibility:hidden;pointer-events:none;";
+    document.documentElement.appendChild(probe);
+    var h = probe.offsetHeight;
+    probe.parentNode.removeChild(probe);
+    return h;
+  }
   function fitToScreen(){
     var root = document.documentElement;
     var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
     var portrait = window.innerHeight >= window.innerWidth;
     var full = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
+    var target = window.innerHeight;
     var gap = full - window.innerHeight;
-    if(standalone && gap > 0 && gap <= 80){
-      root.style.setProperty("--app-h", full + "px");
+    if(standalone && gap > 0 && gap <= 80) target = full;   /* page laid out short */
+    var dvh = measureDvh();
+    if(target - dvh > 1){                                   /* 100dvh short of the real height */
+      root.style.setProperty("--app-h", target + "px");
       root.classList.add("fit-screen");
     } else {
       root.style.removeProperty("--app-h");
