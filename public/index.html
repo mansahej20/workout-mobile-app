@@ -2177,7 +2177,7 @@
       var allSets = currentLog.exercises[key].sets;
       var justCompleted = setObj.done && allSets.every(function(x){ return x.done; });
       if(setObj.done){
-        startRest(parseInt(doneBtn.dataset.rest, 10), doneBtn.dataset.name);
+        startRest(parseInt(doneBtn.dataset.rest, 10), doneBtn.dataset.name, justCompleted ? whatsNext(key) : null);
       }
       scheduleSave();
       render();
@@ -3380,14 +3380,34 @@
     return h;
   }
 
-  function startRest(seconds, name){
+  /* After the last set of an exercise: the next thing still to do today,
+     following today's order. Returns { name } or { done:true }. */
+  function whatsNext(finishedKey){
+    var list = orderedExercises(currentDayPlan);
+    var at = -1;
+    list.forEach(function(x, i){ if(x.key === finishedKey) at = i; });
+    var rotated = list.slice(at + 1).concat(list.slice(0, Math.max(at, 0)));
+    for(var i=0;i<rotated.length;i++){
+      var l = currentLog.exercises[rotated[i].key];
+      if(l && !l.skipped && !l.sets.every(function(x){ return x.done; })) return { name: rotated[i].name || "your next exercise" };
+    }
+    var cardio = (currentDayPlan.cardio || []).filter(function(c){ var cl = currentLog.cardio[c.key]; return cl && !cl.done; });
+    if(cardio.length) return { name: cardio[0].name || "your cardio" };
+    return { done:true };
+  }
+
+  function startRest(seconds, name, next){
     if(!seconds || seconds <= 0) return;
     unlockAudio();
-    restState = { active:true, total:seconds, endAt: Date.now() + seconds*1000, pausedRemaining:0, name:name, finished:false, paused:false };
+    var alertTitle = "Rest over", alertBody = "Time for your next set of " + (name || "this exercise") + ".";
+    var label = name;
+    if(next && next.done){ alertTitle = "Workout done"; alertBody = "That was your last set today. Nice work."; label = "Last set done"; }
+    else if(next){ alertTitle = "Next up: " + next.name; alertBody = (name ? name + " is done. " : "") + "Time for " + next.name + "."; label = "Next up: " + next.name; }
+    restState = { active:true, total:seconds, endAt: Date.now() + seconds*1000, pausedRemaining:0, name:label, finished:false, paused:false, alertTitle:alertTitle, alertBody:alertBody };
     restScreenMinimized = false;
     persistTimer();
     clearRestNotifications();
-    scheduleRestAlert(restState.endAt, name);
+    scheduleRestAlert(restState.endAt, name, alertTitle, alertBody);
     runTicker();
     renderRest();
   }
@@ -3426,7 +3446,7 @@
     }
     persistTimer();
     if(restState.paused) cancelRestAlert();
-    else scheduleRestAlert(restState.endAt, restState.name);
+    else scheduleRestAlert(restState.endAt, restState.name, restState.alertTitle, restState.alertBody);
     renderRest();
   }
 
@@ -3441,7 +3461,7 @@
     restState.total = Math.max(restState.total, restRemaining());
     persistTimer();
     if(restRemaining() <= 0){ restState.paused = false; cancelRestAlert(); onRestComplete(); return; }
-    if(!restState.paused) scheduleRestAlert(restState.endAt, restState.name);
+    if(!restState.paused) scheduleRestAlert(restState.endAt, restState.name, restState.alertTitle, restState.alertBody);
     renderRest();
   }
 
