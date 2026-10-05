@@ -736,7 +736,7 @@
   #auth-screen.show{ display:flex; }
   .auth-box{ width:100%; max-width:340px; }
   .auth-title{ font-size:28px; font-weight:700; margin:0 0 6px; letter-spacing:-0.4px; }
-  .auth-title span{ color:var(--accent); }
+  .auth-title .brand{ flex:none; align-self:auto; font-size:inherit; letter-spacing:inherit; }
   .auth-sub{ color:var(--text-dim); font-size:14px; margin:0 0 28px; }
   .auth-box label{ display:block; font-size:12px; font-weight:700; color:var(--text-dim); margin:0 0 6px; }
   .auth-box input{
@@ -1141,7 +1141,7 @@
       padding:calc(6px + env(safe-area-inset-top,0px)) 12px 6px;
     }
     .header-top{ display:contents; }
-    .brand{ order:1; flex:1 1 auto; font-size:20px; }
+    .brand{ order:1; flex:0 0 auto; margin-right:auto; font-size:20px; }
     .date-block{ order:2; flex:0 1 430px; min-width:0; display:flex; align-items:center; gap:10px; }
     .date-block .date-row{ flex:1 1 auto; min-width:0; }
     .day-title{ margin:0; flex:0 1 auto; max-width:120px; }
@@ -1201,11 +1201,23 @@
 
   /* Header: logo top-left, the day's workout name under the date */
   .brand{
-    flex:1; min-width:0;
+    flex:0 0 auto;
     font-size:24px; font-weight:700; letter-spacing:-0.5px; line-height:1;
     align-self:center;
   }
-  .brand span{ color:var(--accent); }
+  /* Logo: the word with a barbell underneath as its underline. Sized in em so it scales with the text. */
+  .brand{ display:inline-flex; flex-direction:column; align-items:stretch; }
+  .brand-word{ color:var(--text); }
+  .brand-dot{ color:var(--accent); }
+  .barbell{
+    display:flex; align-items:center; gap:0.04em;
+    height:0.42em; margin-top:0.12em;
+    padding-right:0.28em;   /* keeps the bar under the word, not the full stop */
+  }
+  .barbell i{ display:block; background:var(--accent); border-radius:0.04em; flex:0 0 auto; }
+  .barbell .plate{ width:0.12em; height:0.3em; }
+  .barbell .plate.big{ width:0.14em; height:0.42em; }
+  .barbell .bar{ flex:1 1 auto; height:0.08em; border-radius:0.04em; }
   .day-title{
     display:flex; align-items:center; justify-content:center; gap:6px;
     margin-top:8px;
@@ -1218,7 +1230,7 @@
 <body>
 <div id="auth-screen">
   <form class="auth-box" id="auth-form">
-    <h1 class="auth-title">Repped<span>.</span></h1>
+    <h1 class="auth-title"><span class="brand brand-lg" role="img" aria-label="Repped"><span class="brand-word">Repped<span class="brand-dot">.</span></span><span class="barbell" aria-hidden="true"><i class="plate big"></i><i class="plate"></i><i class="bar"></i><i class="plate"></i><i class="plate big"></i></span></span></h1>
     <p class="auth-sub">Sign in to your account. No account yet? Ask the app owner to add you.</p>
     <label for="auth-email">Email</label>
     <input id="auth-email" type="email" autocomplete="email" autocapitalize="none" autocorrect="off" required />
@@ -1243,7 +1255,7 @@
 <div id="app">
   <header id="app-header">
     <div class="header-top">
-      <div class="brand" aria-label="Repped">Repped<span>.</span></div>
+      <div class="brand" role="img" aria-label="Repped"><span class="brand-word">Repped<span class="brand-dot">.</span></span><span class="barbell" aria-hidden="true"><i class="plate big"></i><i class="plate"></i><i class="bar"></i><i class="plate"></i><i class="plate big"></i></span></div>
       <div class="header-actions">
         <button class="today-btn" id="today-btn">Today</button>
         <button class="avatar-btn" id="header-avatar" data-open-profile aria-label="Profile and settings"></button>
