@@ -84,24 +84,6 @@
     gap:10px;
     margin-bottom:10px;
   }
-  .day-name{ min-width:0; flex:1; }
-  .day-name .weekday{
-    font-size:17px;
-    font-weight:700;
-    display:block;
-    line-height:1.25;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
-  }
-  .day-name .plan-title{
-    font-size:13px;
-    color:var(--accent);
-    font-weight:700;
-    display:block;
-    line-height:1.3;
-    margin-top:1px;
-  }
   .today-btn{
     flex:0 0 auto;
     background:var(--surface-2);
@@ -1159,11 +1141,11 @@
       padding:calc(6px + env(safe-area-inset-top,0px)) 12px 6px;
     }
     .header-top{ display:contents; }
-    .day-name{ order:1; flex:1 1 auto; }
-    .date-row{ order:2; flex:0 1 330px; min-width:0; }
+    .brand{ order:1; flex:1 1 auto; font-size:20px; }
+    .date-block{ order:2; flex:0 1 430px; min-width:0; display:flex; align-items:center; gap:10px; }
+    .date-block .date-row{ flex:1 1 auto; min-width:0; }
+    .day-title{ margin:0; flex:0 1 auto; max-width:120px; }
     .header-actions{ order:3; }
-    .day-name .weekday{ font-size:15px; }
-    .day-name .plan-title{ font-size:12px; }
     .icon-btn, .date-input-wrap{ height:36px; }
     .icon-btn{ width:36px; flex-basis:36px; }
     #content{ padding-top:10px; }
@@ -1216,6 +1198,21 @@
   .swap-panel .swap-custom[hidden]{ display:none; }
   .swap-hint{ color:var(--text-dim); font-size:12px; margin:2px 0 10px; }
   .swap-panel .pill-btn[disabled]{ opacity:0.4; }
+
+  /* Header: logo top-left, the day's workout name under the date */
+  .brand{
+    flex:1; min-width:0;
+    font-size:24px; font-weight:700; letter-spacing:-0.5px; line-height:1;
+    align-self:center;
+  }
+  .brand span{ color:var(--accent); }
+  .day-title{
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    margin-top:8px;
+    font-size:13px; font-weight:700; color:var(--accent);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .day-title .sync-dot{ margin-left:0; flex:0 0 auto; }
 </style>
 </head>
 <body>
@@ -1246,22 +1243,22 @@
 <div id="app">
   <header id="app-header">
     <div class="header-top">
-      <div class="day-name">
-        <span class="weekday" id="weekday-label">—</span>
-        <span class="plan-title"><span id="plan-title-label">—</span><span class="sync-dot" id="sync-dot" title="Synced"></span></span>
-      </div>
+      <div class="brand" aria-label="Repped">Repped<span>.</span></div>
       <div class="header-actions">
         <button class="today-btn" id="today-btn">Today</button>
         <button class="avatar-btn" id="header-avatar" data-open-profile aria-label="Profile and settings"></button>
       </div>
     </div>
-    <div class="date-row">
-      <button class="icon-btn" id="prev-day" aria-label="Previous day">&#8249;</button>
-      <label class="date-input-wrap">
-        <span class="date-display" id="date-display">—</span>
-        <input type="date" id="date-input" aria-label="Pick a date" />
-      </label>
-      <button class="icon-btn" id="next-day" aria-label="Next day">&#8250;</button>
+    <div class="date-block">
+      <div class="date-row">
+        <button class="icon-btn" id="prev-day" aria-label="Previous day">&#8249;</button>
+        <label class="date-input-wrap">
+          <span class="date-display" id="date-display">—</span>
+          <input type="date" id="date-input" aria-label="Pick a date" />
+        </label>
+        <button class="icon-btn" id="next-day" aria-label="Next day">&#8250;</button>
+      </div>
+      <div class="day-title"><span id="plan-title-label">—</span><span class="sync-dot" id="sync-dot" title="Synced"></span></div>
     </div>
   </header>
 
@@ -1810,12 +1807,10 @@
   }
 
   /* ---------------- Header ---------------- */
-  var weekdayLabel = document.getElementById("weekday-label");
   var planTitleLabel = document.getElementById("plan-title-label");
   var dateInput = document.getElementById("date-input");
 
   function renderHeader(){
-    weekdayLabel.textContent = WEEKDAY_NAMES[currentDow] + ", " + formatShort(currentDate);
     var hasContent = currentDayPlan.exercises.length || currentDayPlan.cardio.length;
     planTitleLabel.textContent = currentDayPlan.title || (hasContent ? "Workout" : (plans.length ? "Rest" : "No plan yet"));
     dateInput.value = currentDate;
