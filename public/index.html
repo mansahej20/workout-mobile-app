@@ -1208,11 +1208,9 @@
   /* Logo: the word with a barbell underneath as its underline. Sized in em so it scales with the text. */
   .brand{ display:inline-flex; flex-direction:column; align-items:stretch; }
   .brand-word{ color:var(--text); }
-  .brand-dot{ color:var(--accent); }
   .barbell{
     display:flex; align-items:center; gap:0.04em;
     height:0.42em; margin-top:0.12em;
-    padding-right:0.28em;   /* keeps the bar under the word, not the full stop */
   }
   .barbell i{ display:block; background:var(--accent); border-radius:0.04em; flex:0 0 auto; }
   .barbell .plate{ width:0.12em; height:0.3em; }
@@ -1230,7 +1228,7 @@
 <body>
 <div id="auth-screen">
   <form class="auth-box" id="auth-form">
-    <h1 class="auth-title"><span class="brand brand-lg" role="img" aria-label="Repped"><span class="brand-word">Repped<span class="brand-dot">.</span></span><span class="barbell" aria-hidden="true"><i class="plate big"></i><i class="plate"></i><i class="bar"></i><i class="plate"></i><i class="plate big"></i></span></span></h1>
+    <h1 class="auth-title"><span class="brand brand-lg" role="img" aria-label="Repped"><span class="brand-word">Repped</span><span class="barbell" aria-hidden="true"><i class="plate big"></i><i class="plate"></i><i class="bar"></i><i class="plate"></i><i class="plate big"></i></span></span></h1>
     <p class="auth-sub">Sign in to your account. No account yet? Ask the app owner to add you.</p>
     <label for="auth-email">Email</label>
     <input id="auth-email" type="email" autocomplete="email" autocapitalize="none" autocorrect="off" required />
@@ -1255,7 +1253,7 @@
 <div id="app">
   <header id="app-header">
     <div class="header-top">
-      <div class="brand" role="img" aria-label="Repped"><span class="brand-word">Repped<span class="brand-dot">.</span></span><span class="barbell" aria-hidden="true"><i class="plate big"></i><i class="plate"></i><i class="bar"></i><i class="plate"></i><i class="plate big"></i></span></div>
+      <div class="brand" role="img" aria-label="Repped"><span class="brand-word">Repped</span><span class="barbell" aria-hidden="true"><i class="plate big"></i><i class="plate"></i><i class="bar"></i><i class="plate"></i><i class="plate big"></i></span></div>
       <div class="header-actions">
         <button class="today-btn" id="today-btn">Today</button>
         <button class="avatar-btn" id="header-avatar" data-open-profile aria-label="Profile and settings"></button>
