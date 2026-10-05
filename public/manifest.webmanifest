@@ -1,6 +1,6 @@
 {
-  "name": "Repped",
-  "short_name": "Repped",
+  "name": "Racked",
+  "short_name": "Racked",
   "description": "Workout tracker with sets, weights and a rest timer.",
   "start_url": "/",
   "scope": "/",

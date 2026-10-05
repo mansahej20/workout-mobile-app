@@ -1,4 +1,4 @@
--- Repped: rest-timer alerts that arrive even when the app is closed.
+-- Racked: rest-timer alerts that arrive even when the app is closed.
 -- Safe to run more than once. Run in the Supabase SQL Editor.
 
 create extension if not exists pg_net with schema extensions;

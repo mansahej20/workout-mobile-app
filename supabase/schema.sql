@@ -1,4 +1,4 @@
--- Repped: one row per user per day. The whole day's log lives in `data` (jsonb).
+-- Racked: one row per user per day. The whole day's log lives in `data` (jsonb).
 create table if not exists public.workout_logs (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users (id) on delete cascade default auth.uid(),
