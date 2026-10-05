@@ -1,4 +1,4 @@
--- Racked: workout plan profiles. Run this once in the Supabase SQL Editor.
+-- Repped: workout plan profiles. Run this once in the Supabase SQL Editor.
 
 create table if not exists public.workout_plans (
   id          uuid primary key,
