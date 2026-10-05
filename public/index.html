@@ -1212,13 +1212,14 @@
      cuts a small gap where the bar passes behind each letter. */
   .brand-word{
     color:var(--text); position:relative; z-index:1;
-    letter-spacing:0.035em;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
     text-shadow:
       0.028em 0 var(--bg), -0.028em 0 var(--bg), 0 0.028em var(--bg), 0 -0.028em var(--bg);
   }
   .brand-r{ display:inline-block; transform:scaleX(-1); }
   .barbell{
-    position:absolute; left:0; right:0; top:60%;
+    position:absolute; left:0; right:0; top:52%;
     display:flex; align-items:center; gap:0.04em;
     height:0.46em; transform:translateY(-50%);
     pointer-events:none; z-index:0;
