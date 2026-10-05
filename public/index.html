@@ -1205,29 +1205,15 @@
     font-size:24px; font-weight:700; letter-spacing:-0.5px; line-height:1;
     align-self:center;
   }
-  /* Logo: a barbell struck through the word. The plates sit just past each end
-     of the word so they never cover a letter. Sized in em so it scales with the text. */
-  .brand{ display:inline-flex; position:relative; padding:0 0.42em; }
-  /* The word sits in front of the bar. A thin outline in the background colour
-     cuts a small gap where the bar passes behind each letter. */
-  .brand-word{
-    color:var(--text); position:relative; z-index:1;
-    text-transform:uppercase;
-    letter-spacing:0.05em;
-    text-shadow:
-      0.028em 0 var(--bg), -0.028em 0 var(--bg), 0 0.028em var(--bg), 0 -0.028em var(--bg);
+  /* Logo: the word in capitals with a barbell bending over it. The SVG is
+     sized in em so it scales with the text. */
+  .brand{ display:inline-flex; flex-direction:column; align-items:center; }
+  .brand-word{ color:var(--text); text-transform:uppercase; letter-spacing:0.05em; margin-right:-0.05em; }
+  .barbell-arc{
+    display:block; color:var(--accent); overflow:visible;
+    width:calc(100% + 0.5em); height:0.6em;
+    margin:0 -0.25em 0.08em;
   }
-  .brand-r{ display:inline-block; transform:scaleX(-1); }
-  .barbell{
-    position:absolute; left:0; right:0; top:52%;
-    display:flex; align-items:center; gap:0.04em;
-    height:0.46em; transform:translateY(-50%);
-    pointer-events:none; z-index:0;
-  }
-  .barbell i{ display:block; background:var(--accent); border-radius:0.04em; flex:0 0 auto; }
-  .barbell .plate{ width:0.12em; height:0.3em; }
-  .barbell .plate.big{ width:0.14em; height:0.42em; }
-  .barbell .bar{ flex:1 1 auto; height:0.11em; border-radius:0.05em; }
   .day-title{
     display:flex; align-items:center; justify-content:center; gap:6px;
     margin-top:8px;
@@ -1240,7 +1226,7 @@
 <body>
 <div id="auth-screen">
   <form class="auth-box" id="auth-form">
-    <h1 class="auth-title"><span class="brand brand-lg" role="img" aria-label="Repped"><span class="brand-word"><span class="brand-r">R</span>epped</span><span class="barbell" aria-hidden="true"><i class="plate big"></i><i class="plate"></i><i class="bar"></i><i class="plate"></i><i class="plate big"></i></span></span></h1>
+    <h1 class="auth-title"><span class="brand brand-lg" role="img" aria-label="Repped"><svg class="barbell-arc" viewBox="0 0 92 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3.04 12.36 L11 10.4 Q46 1.8 81 10.4 L88.96 12.36" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><g fill="currentColor"><rect x="5.08" y="6.40" width="2.9" height="10.2" rx="0.7" transform="rotate(-13.80 6.53 11.50)"/><rect x="8.44" y="7.13" width="2.4" height="7.2" rx="0.7" transform="rotate(-13.80 9.64 10.73)"/><rect x="84.02" y="6.40" width="2.9" height="10.2" rx="0.7" transform="rotate(13.80 85.47 11.50)"/><rect x="81.16" y="7.13" width="2.4" height="7.2" rx="0.7" transform="rotate(13.80 82.36 10.73)"/></g></svg><span class="brand-word">Repped</span></span></h1>
     <p class="auth-sub">Sign in to your account. No account yet? Ask the app owner to add you.</p>
     <label for="auth-email">Email</label>
     <input id="auth-email" type="email" autocomplete="email" autocapitalize="none" autocorrect="off" required />
@@ -1265,7 +1251,7 @@
 <div id="app">
   <header id="app-header">
     <div class="header-top">
-      <div class="brand" role="img" aria-label="Repped"><span class="brand-word"><span class="brand-r">R</span>epped</span><span class="barbell" aria-hidden="true"><i class="plate big"></i><i class="plate"></i><i class="bar"></i><i class="plate"></i><i class="plate big"></i></span></div>
+      <div class="brand" role="img" aria-label="Repped"><svg class="barbell-arc" viewBox="0 0 92 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3.04 12.36 L11 10.4 Q46 1.8 81 10.4 L88.96 12.36" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><g fill="currentColor"><rect x="5.08" y="6.40" width="2.9" height="10.2" rx="0.7" transform="rotate(-13.80 6.53 11.50)"/><rect x="8.44" y="7.13" width="2.4" height="7.2" rx="0.7" transform="rotate(-13.80 9.64 10.73)"/><rect x="84.02" y="6.40" width="2.9" height="10.2" rx="0.7" transform="rotate(13.80 85.47 11.50)"/><rect x="81.16" y="7.13" width="2.4" height="7.2" rx="0.7" transform="rotate(13.80 82.36 10.73)"/></g></svg><span class="brand-word">Repped</span></div>
       <div class="header-actions">
         <button class="today-btn" id="today-btn">Today</button>
         <button class="avatar-btn" id="header-avatar" data-open-profile aria-label="Profile and settings"></button>
