@@ -1221,9 +1221,126 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .day-title .sync-dot{ margin-left:0; flex:0 0 auto; }
+
+  /* ---------- Loading screen ---------- */
+  #splash{
+    position:fixed; inset:0; z-index:200;
+    background:var(--bg);
+    display:flex; align-items:center; justify-content:center;
+    transition:opacity 260ms var(--ease-out);
+  }
+  #splash.hide{ opacity:0; pointer-events:none; }
+  .splash-logo{
+    display:inline-flex; flex-direction:column; align-items:center;
+    font-size:46px; font-weight:700; line-height:1;
+    margin-top:-6vh;
+  }
+  .splash-bar{
+    display:block; color:var(--accent); overflow:visible; opacity:0;
+    width:calc(100% + 0.5em); height:0.6em; margin:0 -0.25em 0.08em;
+    will-change:transform;
+  }
+  .splash-word{
+    color:var(--text); text-transform:uppercase;
+    letter-spacing:0.05em; margin-right:-0.05em;
+    animation:splashWord 560ms cubic-bezier(0.23,1,0.32,1) both;
+  }
+  @keyframes splashWord{
+    from{ letter-spacing:-0.32em; opacity:0; transform:scale(0.9); }
+    to{ letter-spacing:0.05em; opacity:1; transform:none; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .splash-word{ animation:none; }
+  }
 </style>
 </head>
 <body>
+<div id="splash" aria-hidden="true">
+  <div class="splash-logo">
+    <svg class="splash-bar" id="splash-bar" viewBox="0 0 92 14" preserveAspectRatio="none">
+      <path id="sp-bar" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      <g fill="currentColor"><rect id="sp-p0" rx="0.7"/><rect id="sp-p1" rx="0.7"/><rect id="sp-p2" rx="0.7"/><rect id="sp-p3" rx="0.7"/></g>
+    </svg>
+    <div class="splash-word">Racked</div>
+  </div>
+</div>
+<script>
+/* Loading screen: the word opens out, then the barbell drops onto it,
+   bends on impact, bounces and settles bent (the same shape as the logo).
+   It stays until the app has loaded, and at least until the animation ends. */
+(function(){
+  var splash = document.getElementById("splash");
+  var svg = document.getElementById("splash-bar");
+  var bar = document.getElementById("sp-bar");
+  var plates = [0,1,2,3].map(function(i){ return document.getElementById("sp-p" + i); });
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* k = how far the bar is bent: 0 straight, 1 the logo's resting bend */
+  function draw(k){
+    var P0 = [11, 10.4], P2 = [81, 10.4], P1 = [46, 10.4 - 8.6*k];
+    function unit(a, b){ var dx = b[0]-a[0], dy = b[1]-a[1], l = Math.hypot(dx, dy) || 1; return [dx/l, dy/l]; }
+    var d0 = unit(P0, P1), d1 = unit(P1, P2), S = 8.2;
+    var L = [P0[0]-d0[0]*S, P0[1]-d0[1]*S], R = [P2[0]+d1[0]*S, P2[1]+d1[1]*S];
+    bar.setAttribute("d", "M" + L[0] + " " + L[1] + " L" + P0[0] + " " + P0[1] + " Q" + P1[0] + " " + P1[1] + " " + P2[0] + " " + P2[1] + " L" + R[0] + " " + R[1]);
+    var a0 = Math.atan2(d0[1], d0[0]) * 180/Math.PI, a1 = Math.atan2(d1[1], d1[0]) * 180/Math.PI;
+    var spec = [[P0, d0, -4.6, 2.9, 10.2, a0], [P0, d0, -1.4, 2.4, 7.2, a0], [P2, d1, 4.6, 2.9, 10.2, a1], [P2, d1, 1.4, 2.4, 7.2, a1]];
+    spec.forEach(function(p, i){
+      var x = p[0][0] + p[1][0]*p[2], y = p[0][1] + p[1][1]*p[2];
+      var r = plates[i];
+      r.setAttribute("x", x - p[3]/2); r.setAttribute("y", y - p[4]/2);
+      r.setAttribute("width", p[3]); r.setAttribute("height", p[4]);
+      r.setAttribute("transform", "rotate(" + p[5] + " " + x + " " + y + ")");
+    });
+  }
+
+  var FALL_AT = 380, FALL_MS = 320, SETTLE_MS = 760;
+  var END = FALL_AT + FALL_MS + SETTLE_MS;
+  var t0 = performance.now(), animDone = false, appReady = false, hidden = false, dropFrom = -160;
+
+  function frame(){
+    var t = performance.now() - t0;
+    if(t < FALL_AT){
+      svg.style.opacity = "0";
+    } else if(t < FALL_AT + FALL_MS){
+      if(svg.style.opacity !== "1"){
+        svg.style.opacity = "1";
+        dropFrom = -(svg.getBoundingClientRect().top + 60);
+      }
+      var f = (t - FALL_AT) / FALL_MS;
+      svg.style.transform = "translateY(" + (dropFrom * (1 - f*f)) + "px)";   /* gravity: speeds up as it falls */
+      draw(0.12);
+    } else {
+      var dt = t - FALL_AT - FALL_MS;
+      /* bends past its resting shape on impact, springs back and settles at 1 */
+      var k = 1 - 0.88 * Math.exp(-dt/150) * Math.cos(2*Math.PI*dt/260);
+      var y = -12 * Math.exp(-dt/150) * Math.abs(Math.sin(Math.PI*dt/210));
+      if(dt >= SETTLE_MS){ k = 1; y = 0; }
+      draw(k);
+      svg.style.transform = "translateY(" + y + "px)";
+      if(dt >= SETTLE_MS){ animDone = true; maybeHide(); return; }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function maybeHide(){
+    if(hidden || !animDone || !appReady) return;
+    hidden = true;
+    splash.classList.add("hide");
+    setTimeout(function(){ if(splash.parentNode) splash.parentNode.removeChild(splash); }, 400);
+  }
+
+  window.__splash = { ready: function(){ appReady = true; maybeHide(); } };
+  /* never block the app if something goes wrong */
+  setTimeout(function(){ animDone = true; appReady = true; maybeHide(); }, 6000);
+
+  if(reduce){
+    draw(1); svg.style.opacity = "1"; animDone = true;
+  } else {
+    draw(0.12);
+    requestAnimationFrame(frame);
+  }
+})();
+</script>
 <div id="auth-screen">
   <form class="auth-box" id="auth-form">
     <h1 class="auth-title"><span class="brand brand-lg" role="img" aria-label="Racked"><svg class="barbell-arc" viewBox="0 0 92 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3.04 12.36 L11 10.4 Q46 1.8 81 10.4 L88.96 12.36" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><g fill="currentColor"><rect x="5.08" y="6.40" width="2.9" height="10.2" rx="0.7" transform="rotate(-13.80 6.53 11.50)"/><rect x="8.44" y="7.13" width="2.4" height="7.2" rx="0.7" transform="rotate(-13.80 9.64 10.73)"/><rect x="84.02" y="6.40" width="2.9" height="10.2" rx="0.7" transform="rotate(13.80 85.47 11.50)"/><rect x="81.16" y="7.13" width="2.4" height="7.2" rx="0.7" transform="rotate(13.80 82.36 10.73)"/></g></svg><span class="brand-word">Racked</span></span></h1>
@@ -1613,6 +1730,7 @@
 
   function showAuth(show){
     document.getElementById("auth-screen").classList.toggle("show", show);
+    if(show && window.__splash) window.__splash.ready();
   }
 
   async function initStore(){
@@ -3609,6 +3727,7 @@
       store = await initStore();
     }catch(e){
       content.innerHTML = '<div class="rest-day"><div class="big">Setup needed</div>Supabase URL and anon key are missing. Check the environment variables in Vercel.</div>';
+      if(window.__splash) window.__splash.ready();
       return;
     }
     updateSyncDot();
@@ -3623,6 +3742,7 @@
       await store.setActivePlan(activePlanId);
     }
     await loadDate(todayStr());
+    if(window.__splash) window.__splash.ready();
   }
   boot();
 
