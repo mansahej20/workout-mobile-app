@@ -3018,6 +3018,7 @@
       return;
     }
     if((t = e.target.closest("[data-push-off]"))){
+      writeJSON(cacheNs + "pushOff", true);
       disablePush().then(renderProfile);
       return;
     }
@@ -3430,14 +3431,21 @@
 
   /* Must start from a tap: iOS only shows the permission prompt then. */
   async function enablePush(){
-    var perm = await Notification.requestPermission();
+    var perm = Notification.permission === "granted" ? "granted" : await Notification.requestPermission();
     if(perm !== "granted") throw new Error(perm === "denied" ? "denied" : "dismissed");
     var reg = await navigator.serviceWorker.ready;
     var sub = await reg.pushManager.getSubscription();
+    var wantKey = b64ToBytes(window.SETLOG_CONFIG.vapidPublicKey);
+    if(sub && sub.options && sub.options.applicationServerKey){
+      /* signed up with an older key: those alerts would be rejected, so sign up again */
+      var have = new Uint8Array(sub.options.applicationServerKey);
+      var same = have.length === wantKey.length && have.every(function(b, i){ return b === wantKey[i]; });
+      if(!same){ try{ await sub.unsubscribe(); }catch(e){} sub = null; }
+    }
     if(!sub){
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: b64ToBytes(window.SETLOG_CONFIG.vapidPublicKey)
+        applicationServerKey: wantKey
       });
     }
     var json = sub.toJSON();
@@ -3447,8 +3455,34 @@
     );
     if(res.error) throw res.error;
     writeJSON(cacheNs + PUSH_KEY_SUFFIX, json.endpoint);
+    try{ localStorage.removeItem(cacheNs + "pushOff"); }catch(e){}
     /* Notifications are the alarm now; in-app sound would stop your music. */
     setAlarmMode("off");
+  }
+
+  /* Rest alerts are on by default: */
+  function pushOptedOut(){ return readJSON(cacheNs + "pushOff", false) === true; }
+  /* (a) with permission already given, sign this phone up quietly on every start
+         (also repairs a missing or outdated sign-up after a reinstall) */
+  function autoEnablePush(){
+    if(pushSupport() !== "ok" || pushOptedOut()) return;
+    if(Notification.permission !== "granted") return;
+    enablePush().catch(function(){});
+  }
+  /* (b) the first time you tick a set, ask for permission. Must run straight
+         from the tap, since iPhone only shows the prompt after one. */
+  function askForPushOnFirstRest(){
+    if(pushSupport() !== "ok" || pushOptedOut()) return;
+    if(Notification.permission !== "default") return;
+    if(readJSON(cacheNs + "pushAsked", false) === true) return;
+    writeJSON(cacheNs + "pushAsked", true);
+    enablePush().then(function(){
+      /* cover the rest that's already counting down */
+      if(restState.active && !restState.paused && !restState.finished){
+        scheduleRestAlert(restState.endAt, restState.name, restState.alertTitle, restState.alertBody);
+      }
+      showToast("Rest alerts on");
+    }).catch(function(){});
   }
 
   async function disablePush(){
@@ -3545,6 +3579,7 @@
     persistTimer();
     clearRestNotifications();
     scheduleRestAlert(restState.endAt, name, alertTitle, alertBody);
+    askForPushOnFirstRest();
     runTicker();
     renderRest();
   }
@@ -3749,6 +3784,7 @@
     updateSyncDot();
     updateHeaderAvatar();
     restoreTimer();
+    autoEnablePush();
     var loaded = await store.loadPlans();
     plans = loaded.plans;
     var settings = await store.getSettings();
