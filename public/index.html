@@ -1277,6 +1277,22 @@
   .day-opt-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .day-opt-tag{ font-size:11px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:1px; }
   .day-opt-check{ color:var(--accent); font-size:16px; }
+  .day-opt-tag.similar{ color:var(--accent); }
+  .merge-opts{ max-height:min(52vh, 420px); overflow-y:auto; -webkit-overflow-scrolling:touch; }
+  .merge-btn{ display:block; margin:-4px 0 12px auto; font-size:12px; }
+
+  .ex-suggest:empty{ display:none; }
+  .ex-suggest{ margin:2px 0 10px; }
+  .suggest-label{ font-size:12px; font-weight:700; color:var(--text-dim); margin:0 0 6px 2px; }
+  .suggest-list{ display:flex; flex-wrap:wrap; gap:6px; }
+  .suggest-chip{
+    display:inline-flex; align-items:center; gap:8px;
+    min-height:36px; padding:6px 12px; border:0; border-radius:999px;
+    background:var(--surface-3, #2a2a2a); color:var(--text); font:inherit; font-size:14px; font-weight:600;
+    cursor:pointer; transition:transform 120ms var(--ease-out), background 150ms;
+  }
+  .suggest-chip:active{ transform:scale(0.96); }
+  .suggest-tag{ font-size:10px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; color:var(--text-faint); }
   .missed-card{ padding:14px 16px; margin-bottom:14px; box-shadow:var(--shadow-med), inset 0 0 0 1px rgba(255,164,43,0.35); }
   .missed-title{ font-size:16px; font-weight:700; }
   .missed-sub{ font-size:13px; color:var(--text-dim); margin:3px 0 12px; }
@@ -1857,9 +1873,10 @@
   /* A date normally follows its own weekday in the plan. "dayFrom" on the log
      means "do that weekday's workout on this date instead" (e.g. Tuesday's Chest on Thursday). */
   function dayPlanFor(saved, dateStr, dow){
-    if(saved && saved.plan && dateStr < todayStr()) return normaliseDay(saved.plan);
+    /* A copy, so swaps for one day never leak into the saved plan. */
+    if(saved && saved.plan && dateStr < todayStr()) return clone(normaliseDay(saved.plan));
     var from = (saved && saved.dayFrom != null) ? saved.dayFrom : dow;
-    return normaliseDay(activeDays()[from]);
+    return clone(normaliseDay(activeDays()[from]));
   }
   /* A swap replaces one exercise for a single day ("this Monday only").
      Stored on that day's log as { originalKey: { key, name, from:<original exercise> } }. */
@@ -2062,7 +2079,7 @@
     if(target === effectiveDow()) return;
     if(logHasActivity(currentLog) && !confirm("You've logged sets for " + (currentDayPlan.title || "today's workout") + ". Switching clears them. Switch anyway?")) return;
     var from = target === currentDow ? null : target;
-    currentDayPlan = normaliseDay(activeDays()[target]);
+    currentDayPlan = clone(normaliseDay(activeDays()[target]));
     currentLog = mergeLog(from == null ? {} : { dayFrom: from }, currentDate, currentDow, currentDayPlan);
     collapsed = {};
     swapOpen = null;
@@ -2223,7 +2240,8 @@
     });
     h += '<optgroup label="Not in the list?"><option value="custom">Type my own exercise…</option></optgroup>';
     h += '</select>';
-    h += '<input class="text-input name-input swap-custom" id="swap-custom" placeholder="Type the exercise name" hidden />';
+    h += '<input class="text-input name-input swap-custom" id="swap-custom" placeholder="Type the exercise name" autocomplete="off" hidden />';
+    h += '<div class="ex-suggest" id="swap-suggest"></div>';
     h += '<p class="swap-hint">Only for this ' + WEEKDAY_NAMES[currentDow] + '. Your plan stays the same.</p>';
     h += '<div class="plan-actions"><button class="pill-btn accent" data-swap-confirm="' + ex.key + '" disabled>Swap</button><button class="pill-btn" data-swap-cancel>Cancel</button></div>';
     h += '</div>';
@@ -2247,13 +2265,15 @@
     if(hasLoggedSets(curKey) && !confirm("You've logged sets for " + (cur.name || "this exercise") + ". Swapping clears them. Swap anyway?")) return;
 
     var fresh;
-    if(newName.trim().toLowerCase() === String(original.name || "").trim().toLowerCase()){
+    if(looseName(newName) === looseName(original.name)){
       /* swapping back to the planned exercise is just an undo */
       delete swaps[origKey];
       fresh = clone(original);
     } else {
+      var known = !libKey && findKnown(newName);
+      if(known) newName = known.name;
       fresh = Object.assign({}, original, { origKey: origKey, swappedFrom: original.name || "", name: newName.trim() });
-      fresh.key = uniqueKey(currentDayPlan, libKey || slugify(newName), cur);
+      fresh.key = uniqueKey(currentDayPlan, libKey || (known ? known.key : slugify(newName)), cur);
       swaps[origKey] = { key: fresh.key, name: fresh.name, from: clone(original) };
     }
     if(Object.keys(swaps).length) currentLog.swaps = swaps; else delete currentLog.swaps;
@@ -2410,12 +2430,17 @@
     var custom = panel.querySelector("#swap-custom");
     var go = panel.querySelector("[data-swap-confirm]");
     custom.hidden = e.target.value !== "custom";
-    if(!custom.hidden){ custom.focus(); go.disabled = !custom.value.trim(); }
+    var box = panel.querySelector("#swap-suggest");
+    if(box) box.innerHTML = custom.hidden ? "" : suggestHtml(custom.value, panel.dataset.swapPanel);
+    if(!custom.hidden){ loadKnownExercises(); custom.focus(); go.disabled = !custom.value.trim(); }
     else go.disabled = !e.target.value;
   });
   content.addEventListener("input", function(e){
     if(activeTab !== "today" || e.target.id !== "swap-custom") return;
-    e.target.closest("[data-swap-panel]").querySelector("[data-swap-confirm]").disabled = !e.target.value.trim();
+    var panel = e.target.closest("[data-swap-panel]");
+    panel.querySelector("[data-swap-confirm]").disabled = !e.target.value.trim();
+    var box = panel.querySelector("#swap-suggest");
+    if(box) box.innerHTML = suggestHtml(e.target.value, panel.dataset.swapPanel);
   });
 
   content.addEventListener("click", function(e){
@@ -2428,6 +2453,10 @@
         return;
       }
       if(e.target.closest("[data-swap-cancel]")){ swapOpen = null; render(); return; }
+      if((sw = e.target.closest("#swap-suggest [data-suggest-key]"))){
+        swapExercise(sw.closest("[data-swap-panel]").dataset.swapPanel, sw.dataset.suggestName, sw.dataset.suggestKey);
+        return;
+      }
       if((sw = e.target.closest("[data-swap-confirm]"))){
         var panel = sw.closest("[data-swap-panel]");
         var v = panel.querySelector("[data-swap-pick]").value;
@@ -2516,11 +2545,15 @@
   });
 
   /* ---------------- Progress tab ---------------- */
-  function renderProgress(){
+  function progressExercises(){
     var exList = allExercises();
     Object.keys(extraExercises).forEach(function(k){
       if(!exList.some(function(x){ return x.key === k; })) exList.push({ key:k, name: extraExercises[k] });
     });
+    return exList;
+  }
+  function renderProgress(){
+    var exList = progressExercises();
     if(!exList.some(function(x){ return x.key === selectedProgressKey; })){
       selectedProgressKey = exList.length ? exList[0].key : null;
     }
@@ -2529,17 +2562,153 @@
     }).join("");
     var html = '<div class="tab-panel">';
     html += '<div class="select-wrap"><select id="exercise-select">' + options + '</select></div>';
+    if(exList.length > 1) html += '<button class="text-btn merge-btn" id="merge-open">Same exercise saved twice? Merge</button>';
     html += '<div class="chart-card" id="chart-card"><div class="chart-empty">Loading…</div></div>';
     html += '<div id="history-list"></div>';
     html += '</div>';
     content.innerHTML = html;
 
+    var mergeBtn = document.getElementById("merge-open");
+    if(mergeBtn) mergeBtn.addEventListener("click", function(){ openMergeSheet(selectedProgressKey); });
     document.getElementById("exercise-select").addEventListener("change", function(e){
       selectedProgressKey = e.target.value;
       loadProgressData();
     });
 
     loadProgressData();
+  }
+
+  /* ---------------- Merge two exercises ---------------- */
+  var mergeSheet = null;
+  function nameOfKey(key){
+    var x = progressExercises().filter(function(e){ return e.key === key; })[0];
+    return x ? x.name : key;
+  }
+  function openMergeSheet(fromKey){
+    if(!fromKey) return;
+    var fromName = nameOfKey(fromKey), q = looseName(fromName);
+    var others = progressExercises().filter(function(x){ return x.key !== fromKey; }).map(function(x){
+      var lx = { loose: looseName(x.name) };
+      var sim = similarity(q, lx);
+      if(sim === 99) sim = Math.min(similarity(lx.loose, { loose:q }), 99);
+      if(sim === 99 && q.length >= 4 && editDistance(q, lx.loose) <= 3) sim = 4;
+      if(sim === 99){
+        var wa = looseWords(fromName), wb = looseWords(x.name);
+        var shared = wa.filter(function(w){ return wb.indexOf(w) !== -1; }).length;
+        if(shared >= 2 || (shared && shared >= Math.min(wa.length, wb.length) / 2 && Math.min(wa.length, wb.length) <= 2)) sim = 5;
+      }
+      return { key:x.key, name:x.name, sim:sim };
+    }).sort(function(a, b){ return a.sim - b.sim || a.name.localeCompare(b.name); });
+    if(!others.length) return;
+    if(!mergeSheet){
+      mergeSheet = document.createElement("div");
+      mergeSheet.className = "sheet-backdrop";
+      mergeSheet.setAttribute("role", "dialog");
+      mergeSheet.setAttribute("aria-modal", "true");
+      mergeSheet.setAttribute("aria-labelledby", "merge-sheet-title");
+      document.body.appendChild(mergeSheet);
+      mergeSheet.addEventListener("click", function(e){
+        var b = e.target.closest("[data-merge-into]");
+        if(b){
+          var from = mergeSheet.dataset.from, to = b.dataset.mergeInto;
+          if(!confirm("Merge " + nameOfKey(from) + " into " + nameOfKey(to) + "? All its sets move over and your plans will use " + nameOfKey(to) + ". This can't be undone.")) return;
+          closeMergeSheet();
+          mergeExercises(from, to);
+          return;
+        }
+        if(e.target === mergeSheet || e.target.closest("[data-merge-close]")) closeMergeSheet();
+      });
+    }
+    mergeSheet.dataset.from = fromKey;
+    var h = '<div class="sheet"><div class="sheet-title" id="merge-sheet-title">Merge ' + esc(fromName) + '</div>';
+    h += '<p class="sheet-text">Pick the exercise it\'s really the same as. Its history joins that one.</p><div class="day-opts merge-opts">';
+    others.forEach(function(x){
+      h += '<button class="day-opt" data-merge-into="' + esc(x.key) + '"><span class="day-opt-name">' + esc(x.name) + '</span>';
+      if(x.sim < 99) h += '<span class="day-opt-tag similar">Similar</span>';
+      h += '</button>';
+    });
+    h += '</div><button class="text-btn sheet-btn" data-merge-close>Cancel</button></div>';
+    mergeSheet.innerHTML = h;
+    requestAnimationFrame(function(){ mergeSheet.classList.add("show"); });
+  }
+  function closeMergeSheet(){ if(mergeSheet) mergeSheet.classList.remove("show"); }
+
+  function remapLog(d, from, to, toName){
+    var changed = false;
+    if(d.exercises && d.exercises[from]){
+      var a = d.exercises[from], b = d.exercises[to];
+      if(b) b.sets = (b.sets || []).concat(a.sets || []);
+      else d.exercises[to] = a;
+      delete d.exercises[from];
+      changed = true;
+    }
+    if(d.plan && Array.isArray(d.plan.exercises)){
+      var hasTo = d.plan.exercises.some(function(x){ return x.key === to; });
+      d.plan.exercises = d.plan.exercises.filter(function(x){
+        if(x.origKey === from){ x.origKey = to; changed = true; }
+        if(x.key !== from) return true;
+        changed = true;
+        if(hasTo) return false;
+        x.key = to; x.name = toName; hasTo = true;
+        return true;
+      });
+    }
+    if(Array.isArray(d.order) && d.order.indexOf(from) !== -1){
+      var seen = {};
+      d.order = d.order.map(function(k){ return k === from ? to : k; }).filter(function(k){ if(seen[k]) return false; seen[k] = true; return true; });
+      changed = true;
+    }
+    if(d.swaps){
+      Object.keys(d.swaps).forEach(function(k){
+        var sw = d.swaps[k];
+        if(sw && sw.key === from){ sw.key = to; sw.name = toName; changed = true; }
+        if(sw && sw.from && sw.from.key === from){ sw.from.key = to; sw.from.name = toName; changed = true; }
+        if(k === from){ if(!d.swaps[to]) d.swaps[to] = sw; delete d.swaps[from]; changed = true; }
+      });
+    }
+    return changed;
+  }
+  function remapPlanDays(days, from, to, toName){
+    var changed = false;
+    Object.keys(days || {}).forEach(function(dk){
+      var day = days[dk];
+      if(!day || !Array.isArray(day.exercises)) return;
+      var hasTo = day.exercises.some(function(x){ return x.key === to; });
+      day.exercises = day.exercises.filter(function(x){
+        if(x.key !== from) return true;
+        changed = true;
+        if(hasTo) return false;
+        x.key = to; x.name = toName; hasTo = true;
+        return true;
+      });
+    });
+    return changed;
+  }
+  async function mergeExercises(from, to){
+    if(!from || !to || from === to) return;
+    var toName = nameOfKey(to);
+    showToast("Merging…");
+    var docs = (await store.queryRecent(2000)).filter(Boolean);
+    for(var i=0;i<docs.length;i++){
+      var d = docs[i];
+      if(d.date && remapLog(d, from, to, toName)){
+        d.updatedAt = Date.now();
+        await store.setDoc(d.date, d);
+      }
+    }
+    for(var j=0;j<plans.length;j++){
+      if(remapPlanDays(plans[j].data.days, from, to, toName)) await store.savePlan(plans[j]);
+    }
+    if(draft) remapPlanDays(draft.data.days, from, to, toName);
+    var prefs = unitPrefs();
+    if(prefs[from] && !prefs[to]){ prefs[to] = prefs[from]; writeJSON(cacheNs + "units", prefs); }
+    delete extraExercises[from];
+    if(!extraExercises[to] && !allExercises().some(function(x){ return x.key === to; })) extraExercises[to] = toName;
+    selectedProgressKey = to;
+    var keepTab = activeTab;
+    await loadDate(currentDate);
+    if(keepTab === "progress" && activeTab === "progress") renderProgress();
+    showToast("Merged into " + toName);
   }
 
   async function signOut(){
@@ -2554,14 +2723,11 @@
   async function loadProgressData(){
     var docs = await store.queryRecent(30);
     var sel = document.getElementById("exercise-select");
-    docs.forEach(function(d){
-      ((d && d.plan && d.plan.exercises) || []).forEach(function(ex){
-        if(!ex.key || !ex.name) return;
-        extraExercises[ex.key] = extraExercises[ex.key] || ex.name;
-        if(sel && !sel.querySelector('option[value="' + ex.key + '"]')){
-          var o = document.createElement("option"); o.value = ex.key; o.textContent = ex.name; sel.appendChild(o);
-        }
-      });
+    harvestLogExercises(docs);
+    Object.keys(extraExercises).forEach(function(k){
+      if(sel && !sel.querySelector('option[value="' + k + '"]')){
+        var o = document.createElement("option"); o.value = k; o.textContent = extraExercises[k]; sel.appendChild(o);
+      }
     });
     var asc = docs.filter(Boolean).slice().sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
     var entries = [];
@@ -2684,6 +2850,106 @@
   });
   function libraryMatch(name){ return LIB_BY_NAME[String(name || "").trim().toLowerCase()] || null; }
 
+  /* ---------------- Same exercise, different spelling ----------------
+     "Lat Pull-Downs", "lat pulldown" and "LAT PULLDOWN" all reduce to
+     "latpulldown", so they share one history. */
+  function looseName(s){
+    return String(s || "").toLowerCase().replace(/&/g, " and ").split(/[^a-z0-9]+/).filter(Boolean)
+      .map(function(w){ return w.length > 2 && /[^s]s$/.test(w) ? w.slice(0, -1) : w; })
+      .join("");
+  }
+  function looseWords(s){
+    return String(s || "").toLowerCase().split(/[^a-z0-9]+/).filter(function(w){ return w.length > 2; })
+      .map(function(w){ return /[^s]s$/.test(w) ? w.slice(0, -1) : w; });
+  }
+  function editDistance(a, b){
+    if(Math.abs(a.length - b.length) > 2) return 99;
+    var prev = [], cur, i, j;
+    for(j=0;j<=b.length;j++) prev[j] = j;
+    for(i=1;i<=a.length;i++){
+      cur = [i];
+      for(j=1;j<=b.length;j++){
+        cur[j] = Math.min(prev[j] + 1, cur[j-1] + 1, prev[j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+      }
+      prev = cur;
+    }
+    return prev[b.length];
+  }
+  /* Everything you've used (plans + logs) first, then the library. */
+  function knownExercises(){
+    var seen = {}, list = [];
+    function add(key, name, mine){
+      if(!key || !name || seen[key]) return;
+      seen[key] = true;
+      list.push({ key:key, name:name, mine:mine, loose: looseName(name) });
+    }
+    allExercises().forEach(function(x){ add(x.key, x.name, !LIB_BY_KEY[x.key]); });
+    Object.keys(extraExercises).forEach(function(k){ add(k, extraExercises[k], !LIB_BY_KEY[k]); });
+    EXERCISE_LIBRARY.forEach(function(g){ g.items.forEach(function(it){ add(it.key, it.name, false); }); });
+    return list;
+  }
+  function findKnown(name){
+    var q = looseName(name);
+    if(!q) return null;
+    var list = knownExercises();
+    for(var i=0;i<list.length;i++){ if(list[i].loose === q) return list[i]; }
+    return null;
+  }
+  /* History key for a typed name: reuse a matching exercise's key, else make one. */
+  function keyForName(name){
+    var m = findKnown(name);
+    return m ? m.key : slugify(name);
+  }
+  function similarity(q, x){
+    if(!q) return 99;
+    if(x.loose === q) return 0;
+    if(x.loose.indexOf(q) === 0) return 1;
+    if(x.loose.indexOf(q) !== -1) return 2;
+    if(q.length >= 5 && editDistance(q, x.loose) <= 2) return 3;
+    return 99;
+  }
+  function suggestionsFor(text, skipKey){
+    var raw = String(text || "").trim(), q = looseName(raw);
+    if(q.length < 2) return [];
+    var hits = [];
+    knownExercises().forEach(function(x){
+      if(x.key === skipKey) return;
+      var s = similarity(q, x);
+      if(s < 99) hits.push({ x:x, s:s });
+    });
+    /* Typed it exactly as an existing name: nothing to suggest. */
+    if(hits.some(function(h){ return h.x.name === raw; })) return [];
+    hits.sort(function(a, b){ return a.s - b.s || (b.x.mine - a.x.mine) || a.x.name.localeCompare(b.x.name); });
+    return hits.slice(0, 4).map(function(h){ return h.x; });
+  }
+  function suggestHtml(text, skipKey){
+    var list = suggestionsFor(text, skipKey);
+    if(!list.length) return "";
+    var h = '<div class="suggest-label">Same as one of these?</div><div class="suggest-list">';
+    list.forEach(function(x){
+      h += '<button type="button" class="suggest-chip" data-suggest-key="' + esc(x.key) + '" data-suggest-name="' + esc(x.name) + '">' +
+        esc(x.name) + '<span class="suggest-tag">' + (x.mine ? 'Yours' : 'Library') + '</span></button>';
+    });
+    return h + '</div>';
+  }
+  var knownLoaded = false;
+  function harvestLogExercises(docs){
+    docs.forEach(function(d){
+      ((d && d.plan && d.plan.exercises) || []).forEach(function(ex){
+        if(ex.key && ex.name && !extraExercises[ex.key]) extraExercises[ex.key] = ex.name;
+      });
+      if(d && d.swaps) Object.keys(d.swaps).forEach(function(k){
+        var s = d.swaps[k];
+        if(s && s.key && s.name && !extraExercises[s.key]) extraExercises[s.key] = s.name;
+      });
+    });
+  }
+  async function loadKnownExercises(){
+    if(knownLoaded || !store) return;
+    knownLoaded = true;
+    try{ harvestLogExercises(await store.queryRecent(120)); }catch(e){ knownLoaded = false; }
+  }
+
   function exercisePickerHtml(ex, i){
     var match = libraryMatch(ex.name);
     var custom = !!ex.custom || (!match && !!String(ex.name || "").trim());
@@ -2699,7 +2965,8 @@
     h += '<optgroup label="Not in the list?"><option value="custom"' + (custom ? ' selected' : '') + '>Type my own exercise…</option></optgroup>';
     h += '</select>';
     if(custom){
-      h += '<input class="text-input name-input custom-name" data-ex-field="name" data-i="' + i + '" value="' + esc(ex.name) + '" placeholder="Type the exercise name" />';
+      h += '<input class="text-input name-input custom-name" data-ex-field="name" data-i="' + i + '" value="' + esc(ex.name) + '" placeholder="Type the exercise name" autocomplete="off" />';
+      if(ex.autoKey) h += '<div class="ex-suggest" data-suggest-for="' + i + '">' + suggestHtml(ex.name, null) + '</div>';
     }
     return h;
   }
@@ -3253,7 +3520,11 @@
     if(t.matches("[data-ex-field]")){
       var ex = day.exercises[+t.dataset.i];
       ex[t.dataset.exField] = t.value;
-      if(t.dataset.exField === "name" && ex.autoKey) ex.key = uniqueKey(day, slugify(t.value), ex);
+      if(t.dataset.exField === "name" && ex.autoKey){
+        ex.key = uniqueKey(day, keyForName(t.value), ex);
+        var box = content.querySelector('[data-suggest-for="' + t.dataset.i + '"]');
+        if(box) box.innerHTML = suggestHtml(t.value, null);
+      }
       schedulePlanSave(); return;
     }
     if(t.matches("[data-c-field]")){
@@ -3275,7 +3546,8 @@
         if(libraryMatch(ex.name)) ex.name = "";
         ex.custom = true;
         ex.autoKey = true;
-        ex.key = uniqueKey(day, slugify(ex.name || "exercise"), ex);
+        ex.key = uniqueKey(day, ex.name ? keyForName(ex.name) : "exercise", ex);
+        loadKnownExercises();
         schedulePlanSave();
         renderPlans();
         var inp = content.querySelector('.custom-name[data-i="' + idx + '"]');
@@ -3302,6 +3574,18 @@
   content.addEventListener("click", async function(e){
     if(activeTab !== "plans") return;
     var t;
+    if((t = e.target.closest("[data-suggest-for] [data-suggest-key]"))){
+      var sday = editingDayData();
+      var sx = sday && sday.exercises[+t.closest("[data-suggest-for]").dataset.suggestFor];
+      if(!sx) return;
+      var lib = LIB_BY_KEY[t.dataset.suggestKey];
+      sx.name = t.dataset.suggestName;
+      sx.key = uniqueKey(sday, t.dataset.suggestKey, sx);
+      if(lib && lib.name === sx.name){ delete sx.custom; delete sx.autoKey; }
+      schedulePlanSave();
+      renderPlans();
+      return;
+    }
     if((t = e.target.closest("[data-plan-new]"))){
       startEditing({ id: uuid(), name: "New plan", data: { days: blankDays() }, updatedAt: Date.now() }, true);
       editingDay = currentDow;
@@ -3963,6 +4247,7 @@
     }
     await loadDate(todayStr());
     if(window.__splash) window.__splash.ready();
+    loadKnownExercises();
   }
   boot();
 
