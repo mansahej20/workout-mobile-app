@@ -1144,7 +1144,7 @@
     .brand{ order:1; flex:0 0 auto; margin-right:auto; font-size:20px; }
     .date-block{ order:2; flex:0 1 430px; min-width:0; display:flex; align-items:center; gap:10px; }
     .date-block .date-row{ flex:1 1 auto; min-width:0; }
-    .day-title{ margin:0; flex:0 1 auto; max-width:120px; }
+    .day-title, button.day-title{ margin:0; flex:0 1 auto; max-width:150px; }
     .header-actions{ order:3; }
     .icon-btn, .date-input-wrap{ height:36px; }
     .icon-btn{ width:36px; flex-basis:36px; }
@@ -1252,6 +1252,34 @@
   @media (prefers-reduced-motion: reduce){
     .splash-word{ animation:none; }
   }
+
+  /* Workout name under the date: tap to do another day's workout */
+  button.day-title{
+    margin:6px auto 0; padding:4px 12px; min-height:32px;
+    background:none; border:none; border-radius:9999px; font-family:inherit;
+    cursor:pointer; max-width:100%;
+    transition:background 140ms var(--ease-out), transform 140ms var(--ease-out);
+  }
+  button.day-title:active{ background:var(--surface-2); transform:scale(0.97); }
+  .date-block{ display:flex; flex-direction:column; }
+  .day-from{ color:var(--text-dim); font-weight:600; }
+  .day-caret{ font-size:10px; color:var(--accent); margin-left:-2px; }
+  .day-opts{ display:flex; flex-direction:column; gap:6px; margin-bottom:6px; }
+  .day-opt{
+    display:flex; align-items:center; gap:12px; width:100%; min-height:52px; padding:0 16px;
+    background:var(--bg); border:none; border-radius:var(--radius-m); color:var(--text);
+    font-family:inherit; font-size:15px; font-weight:700; text-align:left;
+    transition:background 140ms var(--ease-out), transform 140ms var(--ease-out);
+  }
+  .day-opt:active{ transform:scale(0.98); }
+  .day-opt.on{ box-shadow:inset 0 0 0 1px rgba(30,215,96,0.5); }
+  .day-opt-day{ width:36px; color:var(--text-dim); font-size:13px; font-weight:700; }
+  .day-opt-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .day-opt-tag{ font-size:11px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:1px; }
+  .day-opt-check{ color:var(--accent); font-size:16px; }
+  .missed-card{ padding:14px 16px; margin-bottom:14px; box-shadow:var(--shadow-med), inset 0 0 0 1px rgba(255,164,43,0.35); }
+  .missed-title{ font-size:16px; font-weight:700; }
+  .missed-sub{ font-size:13px; color:var(--text-dim); margin:3px 0 12px; }
 </style>
 </head>
 <body>
@@ -1383,7 +1411,7 @@
         </label>
         <button class="icon-btn" id="next-day" aria-label="Next day">&#8250;</button>
       </div>
-      <div class="day-title"><span id="plan-title-label">—</span><span class="sync-dot" id="sync-dot" title="Synced"></span></div>
+      <button class="day-title" id="day-switch" aria-haspopup="dialog" aria-label="Change today's workout"><span id="plan-title-label">—</span><span class="day-from" id="day-from"></span><span class="day-caret" id="day-caret" aria-hidden="true">&#9662;</span><span class="sync-dot" id="sync-dot" title="Synced"></span></button>
     </div>
   </header>
 
@@ -1826,9 +1854,12 @@
   }
   /* Past days that were logged keep the plan they were done with.
      Today and future days follow whichever plan is active now. */
+  /* A date normally follows its own weekday in the plan. "dayFrom" on the log
+     means "do that weekday's workout on this date instead" (e.g. Tuesday's Chest on Thursday). */
   function dayPlanFor(saved, dateStr, dow){
     if(saved && saved.plan && dateStr < todayStr()) return normaliseDay(saved.plan);
-    return normaliseDay(activeDays()[dow]);
+    var from = (saved && saved.dayFrom != null) ? saved.dayFrom : dow;
+    return normaliseDay(activeDays()[from]);
   }
   /* A swap replaces one exercise for a single day ("this Monday only").
      Stored on that day's log as { originalKey: { key, name, from:<original exercise> } }. */
@@ -1906,6 +1937,7 @@
       }
     });
     if(saved.swaps) base.swaps = saved.swaps;
+    if(saved.dayFrom != null) base.dayFrom = saved.dayFrom;
     if(Array.isArray(saved.order)){
       base.order = saved.order.filter(function(k){ return !!base.exercises[k]; });
     }
@@ -1933,6 +1965,7 @@
     });
     renderHeader();
     render();
+    if(dateStr === todayStr()) checkMissed(dateStr);
   }
 
   function scheduleSave(){
@@ -1955,6 +1988,9 @@
   function renderHeader(){
     var hasContent = currentDayPlan.exercises.length || currentDayPlan.cardio.length;
     planTitleLabel.textContent = currentDayPlan.title || (hasContent ? "Workout" : (plans.length ? "Rest" : "No plan yet"));
+    var moved = currentLog && currentLog.dayFrom != null && currentLog.dayFrom !== currentDow;
+    document.getElementById("day-from").textContent = moved ? " \u00b7 " + WEEKDAY_NAMES[currentLog.dayFrom].slice(0,3) + "'s" : "";
+    document.getElementById("day-caret").style.display = trainingDays().length ? "" : "none";
     dateInput.value = currentDate;
     var dd = document.getElementById("date-display");
     if(dd){
@@ -2006,8 +2042,140 @@
     });
   }
 
+  /* ---------- Switching days ---------- */
+  var DAY_LIST = [1,2,3,4,5,6,0];
+  function trainingDays(){
+    var days = activeDays();
+    return DAY_LIST.filter(function(d){ var x = normaliseDay(days[d]); return x.exercises.length || x.cardio.length; });
+  }
+  function effectiveDow(){ return (currentLog && currentLog.dayFrom != null) ? currentLog.dayFrom : currentDow; }
+  function logHasActivity(log){
+    if(!log) return false;
+    var ex = log.exercises || {}, ca = log.cardio || {};
+    return Object.keys(ex).some(function(k){
+      return (ex[k].sets || []).some(function(x){ return x && (x.done || String(x.weight || "").trim() !== "" || String(x.reps || "").trim() !== ""); });
+    }) || Object.keys(ca).some(function(k){ return ca[k] && (ca[k].done || String(ca[k].value || "").trim() !== ""); });
+  }
+  function dayTitle(d){ var x = normaliseDay(activeDays()[d]); return x.title || "Workout"; }
+
+  function switchDay(target){
+    if(target === effectiveDow()) return;
+    if(logHasActivity(currentLog) && !confirm("You've logged sets for " + (currentDayPlan.title || "today's workout") + ". Switching clears them. Switch anyway?")) return;
+    var from = target === currentDow ? null : target;
+    currentDayPlan = normaliseDay(activeDays()[target]);
+    currentLog = mergeLog(from == null ? {} : { dayFrom: from }, currentDate, currentDow, currentDayPlan);
+    collapsed = {};
+    swapOpen = null;
+    missedInfo = null;
+    scheduleSave();
+    renderHeader();
+    render();
+    showToast(from == null ? "Back to " + WEEKDAY_NAMES[currentDow] + "'s workout" : "Doing " + WEEKDAY_NAMES[target] + "'s " + dayTitle(target) + " today");
+  }
+
+  var daySheet = null;
+  function openDaySheet(){
+    var days = trainingDays();
+    if(!days.length) return;
+    if(!daySheet){
+      daySheet = document.createElement("div");
+      daySheet.className = "sheet-backdrop";
+      daySheet.setAttribute("role", "dialog");
+      daySheet.setAttribute("aria-modal", "true");
+      daySheet.setAttribute("aria-labelledby", "day-sheet-title");
+      document.body.appendChild(daySheet);
+      daySheet.addEventListener("click", function(e){
+        var b = e.target.closest("[data-day-pick]");
+        if(b){ closeDaySheet(); switchDay(+b.dataset.dayPick); return; }
+        if(e.target === daySheet || e.target.closest("[data-day-close]")) closeDaySheet();
+      });
+    }
+    var cur = effectiveDow();
+    var h = '<div class="sheet"><div class="sheet-title" id="day-sheet-title">Workout for ' + WEEKDAY_NAMES[currentDow] + '</div>';
+    h += '<p class="sheet-text">Missed a day? Do another day\'s workout instead. Only this date changes.</p><div class="day-opts">';
+    days.forEach(function(d){
+      var on = d === cur;
+      h += '<button class="day-opt' + (on ? ' on' : '') + '" data-day-pick="' + d + '" aria-pressed="' + on + '">';
+      h += '<span class="day-opt-day">' + WEEKDAY_NAMES[d].slice(0,3) + '</span><span class="day-opt-name">' + esc(dayTitle(d)) + '</span>';
+      if(d === currentDow) h += '<span class="day-opt-tag">Usual</span>';
+      if(on) h += '<span class="day-opt-check" aria-hidden="true">&#10003;</span>';
+      h += '</button>';
+    });
+    h += '</div><button class="text-btn sheet-btn" data-day-close>Cancel</button></div>';
+    daySheet.innerHTML = h;
+    requestAnimationFrame(function(){ daySheet.classList.add("show"); });
+  }
+  function closeDaySheet(){ if(daySheet) daySheet.classList.remove("show"); }
+  document.getElementById("day-switch").addEventListener("click", openDaySheet);
+
+  /* ---------- Missed-workout nudge ----------
+     On today's screen, if an earlier day this week (Mon onwards) had a workout
+     that wasn't done on any day this week, offer to do it today. */
+  var missedInfo = null, missedFor = null;
+  function missedDismissed(){ return readJSON(cacheNs + "missedDismissed", {}); }
+  function weekStart(dateStr){
+    var d = new Date(dateStr + "T00:00:00");
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+  }
+  async function findMissed(dateStr){
+    if(dateStr !== todayStr() || !plans.length) return null;
+    var mon = weekStart(dateStr);
+    if(mon === dateStr) return null;
+    var logs = await store.queryRecent(14);
+    var byDate = {}, done = {};
+    logs.forEach(function(l){
+      if(!l || !l.date || l.date < mon || l.date > dateStr) return;
+      byDate[l.date] = l;
+      if(logHasActivity(l)) done[l.dayFrom != null ? l.dayFrom : dowFromDateStr(l.date)] = true;
+    });
+    var dismissed = missedDismissed();
+    var days = activeDays();
+    var d = new Date(dateStr + "T00:00:00");
+    for(d.setDate(d.getDate() - 1); ; d.setDate(d.getDate() - 1)){
+      var ds = d.getFullYear() + "-" + pad(d.getMonth()+1) + "-" + pad(d.getDate());
+      if(ds < mon) break;
+      var dow = d.getDay(), plan = normaliseDay(days[dow]);
+      if(!(plan.exercises.length || plan.cardio.length)) continue;
+      if(done[dow] || dismissed[ds]) continue;
+      return { date: ds, dow: dow, title: plan.title || "Workout" };
+    }
+    return null;
+  }
+  function checkMissed(dateStr){
+    findMissed(dateStr).then(function(info){
+      missedInfo = info; missedFor = dateStr;
+      if(info && currentDate === dateStr && activeTab === "today") injectMissedCard();
+    }).catch(function(){});
+  }
+  function injectMissedCard(){
+    var old = document.getElementById("missed-card");
+    if(old) old.remove();
+    if(!missedInfo || missedFor !== currentDate || currentDate !== todayStr()) return;
+    if(currentLog.dayFrom != null || logHasActivity(currentLog)) return;
+    if(missedInfo.dow === currentDow) return;
+    var hasOwn = currentDayPlan.exercises.length || currentDayPlan.cardio.length;
+    var el = document.createElement("div");
+    el.className = "card missed-card"; el.id = "missed-card";
+    el.innerHTML = '<div class="missed-title">You missed ' + esc(missedInfo.title) + ' on ' + WEEKDAY_NAMES[missedInfo.dow] + '</div>' +
+      '<div class="missed-sub">' + (hasOwn ? 'Do it today instead of ' + esc(currentDayPlan.title || "today's workout") + '?' : 'Do it today?') + '</div>' +
+      '<div class="plan-actions"><button class="pill-btn accent" data-missed-do>Do it today</button><button class="pill-btn" data-missed-dismiss>Dismiss</button></div>';
+    var panel = content.querySelector(".tab-panel") || content;
+    panel.insertBefore(el, panel.firstChild);
+  }
+  content.addEventListener("click", function(e){
+    if(activeTab !== "today") return;
+    if(e.target.closest("[data-missed-do]") && missedInfo){ switchDay(missedInfo.dow); return; }
+    if(e.target.closest("[data-missed-dismiss]") && missedInfo){
+      var dm = missedDismissed(); dm[missedInfo.date] = true; writeJSON(cacheNs + "missedDismissed", dm);
+      missedInfo = null;
+      var c = document.getElementById("missed-card"); if(c) c.remove();
+      checkMissed(currentDate);   /* there may be an earlier missed day */
+    }
+  });
+
   function render(){
-    if(activeTab === "today") renderToday();
+    if(activeTab === "today"){ renderToday(); injectMissedCard(); return; }
     else if(activeTab === "progress") renderProgress();
     else if(activeTab === "profile") renderProfile();
     else renderPlans();
