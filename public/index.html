@@ -1198,6 +1198,13 @@
   .swap-panel .swap-custom[hidden]{ display:none; }
   .swap-hint{ color:var(--text-dim); font-size:12px; margin:2px 0 10px; }
   .swap-panel .pill-btn[disabled]{ opacity:0.4; }
+  .add-today{ margin-top:4px; margin-bottom:16px; }
+  .add-panel{ margin:4px 0 16px; }
+  .add-fields{ display:grid; grid-template-columns:0.8fr 1fr 1.2fr; gap:8px; margin-top:4px; }
+  .add-fields .edit-field{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .add-fields .text-input{ width:100%; min-width:0; }
+  .add-panel .swap-hint{ margin-top:10px; }
+  .added-note{ color:var(--accent); }
 
   /* Header: logo top-left, the day's workout name under the date */
   .brand{
@@ -1889,6 +1896,18 @@
     });
     return day;
   }
+  /* Exercises added for a single date. Stored on the log as
+     extras:[{ key, name, sets, reps, rest }]; past logs also keep them in their plan snapshot. */
+  function applyExtras(day, extras){
+    if(!Array.isArray(extras)) return day;
+    extras.forEach(function(x){
+      if(!x || !x.key) return;
+      var have = day.exercises.filter(function(e){ return e.key === x.key; })[0];
+      if(have){ have.added = true; return; }
+      day.exercises.push(Object.assign({}, x, { added:true }));
+    });
+    return day;
+  }
   var extraExercises = {};  /* swapped-in exercises seen in your logs, for Progress */
   function allExercises(){
     var seen = {}, list = [];
@@ -1954,6 +1973,7 @@
       }
     });
     if(saved.swaps) base.swaps = saved.swaps;
+    if(Array.isArray(saved.extras) && saved.extras.length) base.extras = saved.extras;
     if(saved.dayFrom != null) base.dayFrom = saved.dayFrom;
     if(Array.isArray(saved.order)){
       base.order = saved.order.filter(function(k){ return !!base.exercises[k]; });
@@ -1972,8 +1992,9 @@
     currentDate = dateStr;
     currentDow = dowFromDateStr(dateStr);
     var saved = await store.getDoc(dateStr);
-    currentDayPlan = applySwaps(dayPlanFor(saved, dateStr, currentDow), saved && saved.swaps);
+    currentDayPlan = applyExtras(applySwaps(dayPlanFor(saved, dateStr, currentDow), saved && saved.swaps), saved && saved.extras);
     swapOpen = null;
+    addOpen = false;
     currentLog = mergeLog(saved, dateStr, currentDow, currentDayPlan);
     collapsed = {};
     currentDayPlan.exercises.forEach(function(ex){
@@ -2083,6 +2104,7 @@
     currentLog = mergeLog(from == null ? {} : { dayFrom: from }, currentDate, currentDow, currentDayPlan);
     collapsed = {};
     swapOpen = null;
+    addOpen = false;
     missedInfo = null;
     scheduleSave();
     renderHeader();
@@ -2224,6 +2246,140 @@
   }
   var GRIP_ICON = '<svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><g fill="currentColor"><circle cx="6.5" cy="4" r="1.5"/><circle cx="11.5" cy="4" r="1.5"/><circle cx="6.5" cy="9" r="1.5"/><circle cx="11.5" cy="9" r="1.5"/><circle cx="6.5" cy="14" r="1.5"/><circle cx="11.5" cy="14" r="1.5"/></g></svg>';
 
+  /* ---------------- Add an exercise for this date only ---------------- */
+  var addOpen = false;
+  function addPanelHtml(){
+    var h = '<div class="swap-panel add-panel" data-add-panel>';
+    h += '<label class="field-label" for="add-pick">Add an exercise</label>';
+    h += '<select class="text-input name-select" id="add-pick" data-add-pick>';
+    h += '<option value="" selected disabled>Choose an exercise…</option>';
+    EXERCISE_LIBRARY.forEach(function(g){
+      h += '<optgroup label="' + g.group + '">';
+      g.items.forEach(function(it){ h += '<option value="lib:' + it.key + '">' + esc(it.name) + '</option>'; });
+      h += '</optgroup>';
+    });
+    h += '<optgroup label="Not in the list?"><option value="custom">Type my own exercise…</option></optgroup>';
+    h += '</select>';
+    h += '<input class="text-input name-input swap-custom" id="add-custom" placeholder="Type the exercise name" autocomplete="off" hidden />';
+    h += '<div class="ex-suggest" id="add-suggest"></div>';
+    h += '<div class="add-fields">';
+    h += '<label class="edit-field"><span class="field-label">Sets</span><input class="text-input" id="add-sets" type="number" inputmode="numeric" min="1" max="20" value="3" /></label>';
+    h += '<label class="edit-field"><span class="field-label">Reps</span><input class="text-input" id="add-reps" value="8-12" /></label>';
+    h += '<label class="edit-field"><span class="field-label">Rest</span><select class="text-input" id="add-rest">' + restOptionsHtml(90) + '</select></label>';
+    h += '</div>';
+    h += '<p class="swap-hint">Only for ' + (currentDate === todayStr() ? 'today' : 'this ' + WEEKDAY_NAMES[currentDow]) + '. Your plan stays the same.</p>';
+    h += '<div class="plan-actions"><button class="pill-btn accent" data-add-confirm disabled>Add</button><button class="pill-btn" data-add-cancel>Cancel</button></div>';
+    h += '</div>';
+    return h;
+  }
+  function addExtra(name, libKey, sets, reps, rest){
+    name = String(name || "").trim();
+    if(!name) return;
+    var key = libKey;
+    if(!key){
+      var known = findKnown(name);
+      if(known){ key = known.key; name = known.name; } else key = slugify(name);
+    }
+    if(currentDayPlan.exercises.some(function(e){ return e.key === key; })){
+      showToast(name + " is already in this workout");
+      return;
+    }
+    var n = Math.min(20, Math.max(1, parseInt(sets, 10) || 3));
+    var item = { key:key, name:name, sets:n, reps: String(reps || "").trim() || "8-12", rest: parseInt(rest, 10) || 90 };
+    currentLog.extras = (currentLog.extras || []).concat([item]);
+    currentDayPlan.exercises.push(Object.assign({}, item, { added:true }));
+    var blank = [];
+    for(var i=0;i<n;i++) blank.push({ weight:"", reps:"", done:false });
+    currentLog.exercises[key] = { unit: preferredUnit(key), sets: blank };
+    if(Array.isArray(currentLog.order)) currentLog.order.push(key);
+    if(!extraExercises[key] && !LIB_BY_KEY[key]) extraExercises[key] = name;
+    addOpen = false;
+    collapsed[key] = false;
+    scheduleSave();
+    render();
+    var card = content.querySelector('[data-ex-card="' + key + '"]');
+    if(card) card.scrollIntoView({ block:"center", behavior:"smooth" });
+    showToast("Added " + name);
+  }
+  function removeExtra(key){
+    var ex = currentDayPlan.exercises.filter(function(e){ return e.key === key; })[0];
+    if(!ex) return;
+    if(hasLoggedSets(key) && !confirm("You've logged sets for " + (ex.name || "this exercise") + ". Removing deletes them. Remove anyway?")) return;
+    currentDayPlan.exercises = currentDayPlan.exercises.filter(function(e){ return e.key !== key; });
+    currentLog.extras = (currentLog.extras || []).filter(function(x){ return x.key !== key; });
+    if(!currentLog.extras.length) delete currentLog.extras;
+    delete currentLog.exercises[key];
+    if(Array.isArray(currentLog.order)) currentLog.order = currentLog.order.filter(function(k){ return k !== key; });
+    delete collapsed[key];
+    scheduleSave();
+    render();
+    showToast("Removed " + (ex.name || "exercise"));
+  }
+  function addPanelReady(panel){
+    var pick = panel.querySelector("[data-add-pick]").value;
+    var ok = pick === "custom" ? !!panel.querySelector("#add-custom").value.trim() : !!pick;
+    panel.querySelector("[data-add-confirm]").disabled = !ok;
+  }
+  content.addEventListener("change", function(e){
+    if(activeTab !== "today" || !e.target.matches("[data-add-pick]")) return;
+    var panel = e.target.closest("[data-add-panel]");
+    var custom = panel.querySelector("#add-custom");
+    var box = panel.querySelector("#add-suggest");
+    custom.hidden = e.target.value !== "custom";
+    box.innerHTML = custom.hidden ? "" : suggestHtml(custom.value, null);
+    var item = e.target.value.indexOf("lib:") === 0 && LIB_BY_KEY[e.target.value.slice(4)];
+    if(item){
+      panel.querySelector("#add-reps").value = item.reps;
+      var rs = panel.querySelector("#add-rest");
+      rs.value = String(item.rest);
+      if(rs.value !== String(item.rest)) rs.value = "90";
+    }
+    if(!custom.hidden){ loadKnownExercises(); custom.focus(); }
+    addPanelReady(panel);
+  });
+  content.addEventListener("input", function(e){
+    if(activeTab !== "today" || e.target.id !== "add-custom") return;
+    var panel = e.target.closest("[data-add-panel]");
+    panel.querySelector("#add-suggest").innerHTML = suggestHtml(e.target.value, null);
+    addPanelReady(panel);
+  });
+  content.addEventListener("click", function(e){
+    if(activeTab !== "today") return;
+    var t;
+    if(e.target.closest("[data-add-open]")){
+      addOpen = true; swapOpen = null; render();
+      var pick = content.querySelector("[data-add-pick]");
+      if(pick){ pick.scrollIntoView({ block:"center", behavior:"smooth" }); pick.focus(); }
+      return;
+    }
+    if(e.target.closest("[data-add-cancel]")){ addOpen = false; render(); return; }
+    if((t = e.target.closest("#add-suggest [data-suggest-key]"))){
+      var panel = t.closest("[data-add-panel]");
+      var inp = panel.querySelector("#add-custom");
+      inp.value = t.dataset.suggestName;
+      panel.querySelector("#add-suggest").innerHTML = "";
+      var lib = LIB_BY_KEY[t.dataset.suggestKey];
+      if(lib && lib.name === t.dataset.suggestName){
+        panel.querySelector("#add-reps").value = lib.reps;
+        var rs = panel.querySelector("#add-rest"); rs.value = String(lib.rest); if(rs.value !== String(lib.rest)) rs.value = "90";
+      }
+      addPanelReady(panel);
+      return;
+    }
+    if((t = e.target.closest("[data-add-confirm]"))){
+      var p2 = t.closest("[data-add-panel]");
+      var v = p2.querySelector("[data-add-pick]").value;
+      var sets = p2.querySelector("#add-sets").value, reps = p2.querySelector("#add-reps").value, rest = p2.querySelector("#add-rest").value;
+      if(v === "custom") addExtra(p2.querySelector("#add-custom").value, "", sets, reps, rest);
+      else if(v.indexOf("lib:") === 0){
+        var it = LIB_BY_KEY[v.slice(4)];
+        if(it) addExtra(it.name, it.key, sets, reps, rest);
+      }
+      return;
+    }
+    if((t = e.target.closest("[data-extra-remove]"))){ removeExtra(t.dataset.extraRemove); return; }
+  });
+
   var swapOpen = null;
   function swapPanelHtml(ex){
     var h = '<div class="swap-panel" data-swap-panel="' + ex.key + '">';
@@ -2300,7 +2456,11 @@
       return;
     }
     if(plan.exercises.length === 0 && plan.cardio.length === 0){
-      content.innerHTML = '<div class="tab-panel rest-day"><div class="big">Rest day</div>Full recovery — nothing logged here today.</div>';
+      var rh = '<div class="tab-panel rest-day"><div class="big">Rest day</div>Full recovery — nothing logged here today.';
+      if(!addOpen) rh += '<div style="margin-top:20px"><button class="pill-btn" data-add-open>Train anyway? Add an exercise</button></div>';
+      rh += '</div>';
+      if(addOpen) rh = '<div class="tab-panel">' + addPanelHtml() + '</div>';
+      content.innerHTML = rh;
       return;
     }
     var html = '<div class="tab-panel">';
@@ -2322,6 +2482,7 @@
         html += '<div class="head-text"><span class="name">' + esc(ex.name || "Untitled exercise") + (ex.optional ? '<span class="optional-tag">Optional</span>' : '') + '</span>';
         html += '<span class="meta">' + ex.sets + ' x ' + esc(ex.reps) + ' &middot; rest ' + formatRestShort(ex.rest) + '</span>';
         if(ex.swappedFrom != null) html += '<span class="swap-note">Swapped this week &middot; usually ' + esc(ex.swappedFrom || "another exercise") + '</span>';
+        if(ex.added) html += '<span class="swap-note added-note">Added for this day only</span>';
         html += '</div>';
         if(skipped) html += '<span class="progress-chip skipped-chip">Skipped</span>';
         else html += '<span class="progress-chip' + (doneCount === log.sets.length ? ' complete' : '') + '">' + doneCount + '/' + log.sets.length + '</span>';
@@ -2342,14 +2503,17 @@
         });
         if(swapOpen === ex.key) html += swapPanelHtml(ex);
         html += '<div class="skip-row">';
-        if(ex.swappedFrom != null) html += '<button class="text-btn swap-btn undo" data-swap-undo="' + ex.key + '">Undo swap</button>';
+        if(ex.added) html += '<button class="text-btn skip-btn" data-extra-remove="' + ex.key + '">Remove exercise</button>';
+        else if(ex.swappedFrom != null) html += '<button class="text-btn swap-btn undo" data-swap-undo="' + ex.key + '">Undo swap</button>';
         else if(swapOpen !== ex.key) html += '<button class="text-btn swap-btn" data-swap-open="' + ex.key + '">Swap exercise</button>';
-        html += '<button class="text-btn skip-btn' + (skipped ? ' undo' : '') + '" data-skip-ex="' + ex.key + '">' + (skipped ? 'Unskip exercise' : 'Skip exercise') + '</button></div>';
+        if(!ex.added) html += '<button class="text-btn skip-btn' + (skipped ? ' undo' : '') + '" data-skip-ex="' + ex.key + '">' + (skipped ? 'Unskip exercise' : 'Skip exercise') + '</button>';
+        html += '</div>';
         html += '</div></div></div>';
         html += '</div>';
       });
       html += '</div>';
     }
+    html += addOpen ? addPanelHtml() : '<button class="add-btn add-today" data-add-open>+ Add exercise</button>';
 
     if(plan.cardio.length){
       html += '<div class="section-label">Cardio</div>';
@@ -2447,7 +2611,7 @@
     if(activeTab === "today"){
       var sw;
       if((sw = e.target.closest("[data-swap-open]"))){
-        swapOpen = sw.dataset.swapOpen; render();
+        swapOpen = sw.dataset.swapOpen; addOpen = false; render();
         var pick = content.querySelector("[data-swap-pick]");
         if(pick){ pick.scrollIntoView({ block:"center", behavior:"smooth" }); pick.focus(); }
         return;
