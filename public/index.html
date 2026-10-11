@@ -387,7 +387,7 @@
   .field-labels span:first-child{ text-align:left; }
   .field-labels span:last-child{ visibility:hidden; }
 
-  .cardio-card{
+  .cardio-main{
     display:flex;
     align-items:center;
     gap:10px;
@@ -1021,7 +1021,10 @@
   /* Unit stays visible next to the number you type, e.g. "5.2 km". */
   .cardio-field{ position:relative; flex:0 0 auto; display:block; }
   .cardio-card .cardio-field input{ width:92px; padding-right:38px; padding-left:6px; text-align:right; }
-  .cardio-card{ flex-wrap:nowrap; }
+  .cardio-main{ flex-wrap:nowrap; }
+  .cardio-card .skip-row{ margin-top:8px; }
+  .cardio-card.skipped .cname{ color:var(--text-dim); text-decoration:line-through; text-decoration-color:var(--text-faint); }
+  .cardio-card .swap-panel .edit-field{ display:flex; flex-direction:column; gap:4px; margin-bottom:8px; }
   .cardio-card .cinfo{ flex:1 1 0; min-width:0; }
   .cardio-card .cname{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .cardio-card .done-pill{ padding:0 14px; }
@@ -1908,6 +1911,34 @@
     });
     return day;
   }
+  var CARDIO_LIBRARY = [
+    { key:"treadmill-run",   name:"Treadmill Run",   kind:"distance" },
+    { key:"outdoor-run",     name:"Outdoor Run",     kind:"distance" },
+    { key:"walk",            name:"Walk",            kind:"distance" },
+    { key:"incline-walk",    name:"Incline Walk",    kind:"duration" },
+    { key:"cycling",         name:"Cycling",         kind:"distance" },
+    { key:"stationary-bike", name:"Stationary Bike", kind:"duration" },
+    { key:"rowing",          name:"Rowing Machine",  kind:"duration" },
+    { key:"elliptical",      name:"Elliptical",      kind:"duration" },
+    { key:"stair-climber",   name:"Stair Climber",   kind:"duration" },
+    { key:"swimming",        name:"Swimming",        kind:"duration" },
+    { key:"jump-rope",       name:"Jump Rope",       kind:"duration" },
+    { key:"hiit",            name:"HIIT Class",      kind:"duration" },
+    { key:"stretching",      name:"Stretching",      kind:"done" }
+  ];
+  var CARDIO_BY_KEY = {};
+  CARDIO_LIBRARY.forEach(function(c){ CARDIO_BY_KEY[c.key] = c; });
+  /* Cardio swaps work like exercise swaps: { originalKey: { key, name, kind, from } } on the log. */
+  function applyCardioSwaps(day, swaps){
+    if(!swaps) return day;
+    day.cardio = day.cardio.map(function(c){
+      var sw = swaps[c.key];
+      if(!sw) return c;
+      return Object.assign({}, c, { key: sw.key, name: sw.name, kind: sw.kind || c.kind,
+        target: (sw.kind && sw.kind !== c.kind) ? "" : c.target, origKey: c.key, swappedFrom: c.name || "" });
+    });
+    return day;
+  }
   var extraExercises = {};  /* swapped-in exercises seen in your logs, for Progress */
   function allExercises(){
     var seen = {}, list = [];
@@ -1974,6 +2005,7 @@
     });
     if(saved.swaps) base.swaps = saved.swaps;
     if(Array.isArray(saved.extras) && saved.extras.length) base.extras = saved.extras;
+    if(saved.cardioSwaps && Object.keys(saved.cardioSwaps).length) base.cardioSwaps = saved.cardioSwaps;
     if(saved.dayFrom != null) base.dayFrom = saved.dayFrom;
     if(Array.isArray(saved.order)){
       base.order = saved.order.filter(function(k){ return !!base.exercises[k]; });
@@ -1983,6 +2015,7 @@
       if(savedC){
         base.cardio[k].value = savedC.value != null ? savedC.value : "";
         base.cardio[k].done = !!savedC.done;
+        if(savedC.skipped) base.cardio[k].skipped = true;
       }
     });
     return base;
@@ -1993,6 +2026,8 @@
     currentDow = dowFromDateStr(dateStr);
     var saved = await store.getDoc(dateStr);
     currentDayPlan = applyExtras(applySwaps(dayPlanFor(saved, dateStr, currentDow), saved && saved.swaps), saved && saved.extras);
+    applyCardioSwaps(currentDayPlan, saved && saved.cardioSwaps);
+    cardioSwapOpen = null;
     swapOpen = null;
     addOpen = false;
     currentLog = mergeLog(saved, dateStr, currentDow, currentDayPlan);
@@ -2105,6 +2140,7 @@
     collapsed = {};
     swapOpen = null;
     addOpen = false;
+    cardioSwapOpen = null;
     missedInfo = null;
     scheduleSave();
     renderHeader();
@@ -2380,6 +2416,122 @@
     if((t = e.target.closest("[data-extra-remove]"))){ removeExtra(t.dataset.extraRemove); return; }
   });
 
+  /* ---------------- Cardio: swap and skip for one day ---------------- */
+  var cardioSwapOpen = null;
+  var CARDIO_KINDS = [["distance","Distance (km)"],["duration","Time (min)"],["done","Just tick done"]];
+  function cardioSwapPanelHtml(c){
+    var h = '<div class="swap-panel" data-cswap-panel="' + c.key + '">';
+    h += '<label class="field-label" for="cswap-pick">Swap ' + esc(c.name || "this activity") + ' for</label>';
+    h += '<select class="text-input name-select" id="cswap-pick" data-cswap-pick>';
+    h += '<option value="" selected disabled>Choose an activity…</option>';
+    CARDIO_LIBRARY.forEach(function(it){
+      if(looseName(it.name) === looseName(c.name)) return;
+      h += '<option value="lib:' + it.key + '">' + esc(it.name) + '</option>';
+    });
+    h += '<option value="custom">Type my own…</option></select>';
+    h += '<input class="text-input name-input swap-custom" id="cswap-custom" placeholder="e.g. Padel, Hike" autocomplete="off" hidden />';
+    h += '<label class="edit-field"><span class="field-label">Track</span><select class="text-input" id="cswap-kind">' +
+      CARDIO_KINDS.map(function(o){ return '<option value="' + o[0] + '"' + (o[0] === (c.kind || "distance") ? ' selected' : '') + '>' + o[1] + '</option>'; }).join("") + '</select></label>';
+    h += '<p class="swap-hint">Only for this ' + WEEKDAY_NAMES[currentDow] + '. Your plan stays the same.</p>';
+    h += '<div class="plan-actions"><button class="pill-btn accent" data-cswap-confirm="' + c.key + '" disabled>Swap</button><button class="pill-btn" data-cswap-cancel>Cancel</button></div>';
+    h += '</div>';
+    return h;
+  }
+  function cardioHasActivity(key){
+    var l = currentLog.cardio[key];
+    return !!l && (l.done || String(l.value || "").trim() !== "");
+  }
+  function swapCardio(curKey, newName, libKey, kind){
+    var idx = -1;
+    currentDayPlan.cardio.forEach(function(x, i){ if(x.key === curKey) idx = i; });
+    newName = String(newName || "").trim();
+    if(idx < 0 || !newName) return;
+    var cur = currentDayPlan.cardio[idx];
+    var origKey = cur.origKey || cur.key;
+    var swaps = currentLog.cardioSwaps || {};
+    var original = (swaps[origKey] && swaps[origKey].from) || cur;
+    if(cardioHasActivity(curKey) && !confirm("You've logged " + (cur.name || "this activity") + ". Swapping clears it. Swap anyway?")) return;
+    var fresh;
+    if(looseName(newName) === looseName(original.name)){
+      delete swaps[origKey];
+      fresh = clone(original);
+      delete fresh.origKey; delete fresh.swappedFrom;
+    } else {
+      var k = kind || original.kind || "distance";
+      var key = uniqueKey(currentDayPlan, libKey || slugify(newName), cur);
+      swaps[origKey] = { key:key, name:newName, kind:k, from: clone(original) };
+      delete swaps[origKey].from.origKey; delete swaps[origKey].from.swappedFrom;
+      fresh = Object.assign({}, original, { key:key, name:newName, kind:k, target: k === original.kind ? original.target : "", origKey:origKey, swappedFrom: original.name || "" });
+    }
+    if(Object.keys(swaps).length) currentLog.cardioSwaps = swaps; else delete currentLog.cardioSwaps;
+    currentDayPlan.cardio[idx] = fresh;
+    delete currentLog.cardio[curKey];
+    currentLog.cardio[fresh.key] = { value:"", done:false };
+    cardioSwapOpen = null;
+    scheduleSave();
+    render();
+    showToast(fresh.swappedFrom != null ? "Swapped to " + fresh.name + " for today" : "Back to " + fresh.name);
+  }
+  function toggleCardioSkip(key){
+    var l = currentLog.cardio[key];
+    if(!l) return;
+    if(l.skipped) delete l.skipped;
+    else {
+      if(cardioHasActivity(key) && !confirm("You've logged this already. Skip it anyway?")) return;
+      l.skipped = true; l.done = false;
+      if(cardioSwapOpen === key) cardioSwapOpen = null;
+    }
+    scheduleSave();
+    render();
+  }
+  function cswapReady(panel){
+    var v = panel.querySelector("[data-cswap-pick]").value;
+    var ok = v === "custom" ? !!panel.querySelector("#cswap-custom").value.trim() : !!v;
+    panel.querySelector("[data-cswap-confirm]").disabled = !ok;
+  }
+  content.addEventListener("change", function(e){
+    if(activeTab !== "today" || !e.target.matches("[data-cswap-pick]")) return;
+    var panel = e.target.closest("[data-cswap-panel]");
+    var custom = panel.querySelector("#cswap-custom");
+    custom.hidden = e.target.value !== "custom";
+    var it = e.target.value.indexOf("lib:") === 0 && CARDIO_BY_KEY[e.target.value.slice(4)];
+    if(it) panel.querySelector("#cswap-kind").value = it.kind;
+    if(!custom.hidden) custom.focus();
+    cswapReady(panel);
+  });
+  content.addEventListener("input", function(e){
+    if(activeTab !== "today" || e.target.id !== "cswap-custom") return;
+    cswapReady(e.target.closest("[data-cswap-panel]"));
+  });
+  content.addEventListener("click", function(e){
+    if(activeTab !== "today") return;
+    var t;
+    if((t = e.target.closest("[data-cswap-open]"))){
+      cardioSwapOpen = t.dataset.cswapOpen; swapOpen = null; addOpen = false; render();
+      var pick = content.querySelector("[data-cswap-pick]");
+      if(pick){ pick.scrollIntoView({ block:"center", behavior:"smooth" }); pick.focus(); }
+      return;
+    }
+    if(e.target.closest("[data-cswap-cancel]")){ cardioSwapOpen = null; render(); return; }
+    if((t = e.target.closest("[data-cswap-confirm]"))){
+      var panel = t.closest("[data-cswap-panel]");
+      var v = panel.querySelector("[data-cswap-pick]").value, kind = panel.querySelector("#cswap-kind").value;
+      if(v === "custom") swapCardio(t.dataset.cswapConfirm, panel.querySelector("#cswap-custom").value, "", kind);
+      else if(v.indexOf("lib:") === 0){
+        var it = CARDIO_BY_KEY[v.slice(4)];
+        if(it) swapCardio(t.dataset.cswapConfirm, it.name, it.key, kind);
+      }
+      return;
+    }
+    if((t = e.target.closest("[data-cswap-undo]"))){
+      var cx = currentDayPlan.cardio.filter(function(x){ return x.key === t.dataset.cswapUndo; })[0];
+      var rec = cx && currentLog.cardioSwaps && currentLog.cardioSwaps[cx.origKey];
+      if(rec) swapCardio(cx.key, rec.from.name || "", rec.from.key, rec.from.kind);
+      return;
+    }
+    if((t = e.target.closest("[data-cskip]"))){ toggleCardioSkip(t.dataset.cskip); return; }
+  });
+
   var swapOpen = null;
   function swapPanelHtml(ex){
     var h = '<div class="swap-panel" data-swap-panel="' + ex.key + '">';
@@ -2519,17 +2671,29 @@
       html += '<div class="section-label">Cardio</div>';
       plan.cardio.forEach(function(c){
         var log = currentLog.cardio[c.key];
-        html += '<div class="card cardio-card">';
-        html += '<div class="cinfo"><div class="cname">' + esc(c.name) + '</div><div class="ctarget">' + esc(c.target) + '</div></div>';
-        if(c.kind !== "done"){
+        var cSkipped = !!log.skipped;
+        html += '<div class="card cardio-card' + (cSkipped ? ' skipped' : '') + '" data-cardio-card="' + c.key + '"><div class="cardio-main">';
+        html += '<div class="cinfo"><div class="cname">' + esc(c.name) + '</div>';
+        if(c.target) html += '<div class="ctarget">' + esc(c.target) + '</div>';
+        if(c.swappedFrom != null) html += '<span class="swap-note">Swapped this week &middot; usually ' + esc(c.swappedFrom || "another activity") + '</span>';
+        html += '</div>';
+        if(cSkipped){
+          html += '<span class="progress-chip skipped-chip">Skipped</span>';
+        } else if(c.kind !== "done"){
           var unit = c.kind === "distance" ? "km" : "min";
           html += '<label class="cardio-field">';
           html += '<input type="number" inputmode="decimal" placeholder="0" aria-label="' + esc(c.name || "Cardio") + ' in ' + unit + '" value="' + esc(log.value) + '" data-cardio-input data-key="' + c.key + '" />';
           html += '<span class="cardio-unit" aria-hidden="true">' + unit + '</span>';
           html += '</label>';
         }
-        html += '<button class="done-pill' + (log.done ? ' on' : '') + '" data-cardio-done data-key="' + c.key + '">' + (log.done ? 'Done' : 'Mark') + '</button>';
+        if(!cSkipped) html += '<button class="done-pill' + (log.done ? ' on' : '') + '" data-cardio-done data-key="' + c.key + '">' + (log.done ? 'Done' : 'Mark') + '</button>';
         html += '</div>';
+        if(cardioSwapOpen === c.key) html += cardioSwapPanelHtml(c);
+        html += '<div class="skip-row">';
+        if(c.swappedFrom != null) html += '<button class="text-btn swap-btn undo" data-cswap-undo="' + c.key + '">Undo swap</button>';
+        else if(cardioSwapOpen !== c.key && !cSkipped) html += '<button class="text-btn swap-btn" data-cswap-open="' + c.key + '">Swap</button>';
+        html += '<button class="text-btn skip-btn' + (cSkipped ? ' undo' : '') + '" data-cskip="' + c.key + '">' + (cSkipped ? 'Unskip' : 'Skip') + '</button>';
+        html += '</div></div>';
       });
     }
 
@@ -2611,7 +2775,7 @@
     if(activeTab === "today"){
       var sw;
       if((sw = e.target.closest("[data-swap-open]"))){
-        swapOpen = sw.dataset.swapOpen; addOpen = false; render();
+        swapOpen = sw.dataset.swapOpen; addOpen = false; cardioSwapOpen = null; render();
         var pick = content.querySelector("[data-swap-pick]");
         if(pick){ pick.scrollIntoView({ block:"center", behavior:"smooth" }); pick.focus(); }
         return;
@@ -4178,7 +4342,7 @@
       var l = currentLog.exercises[rotated[i].key];
       if(l && !l.skipped && !l.sets.every(function(x){ return x.done; })) return { name: rotated[i].name || "your next exercise" };
     }
-    var cardio = (currentDayPlan.cardio || []).filter(function(c){ var cl = currentLog.cardio[c.key]; return cl && !cl.done; });
+    var cardio = (currentDayPlan.cardio || []).filter(function(c){ var cl = currentLog.cardio[c.key]; return cl && !cl.done && !cl.skipped; });
     if(cardio.length) return { name: cardio[0].name || "your cardio" };
     return { done:true };
   }
