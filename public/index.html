@@ -1208,6 +1208,11 @@
   .swap-hint{ color:var(--text-dim); font-size:12px; margin:2px 0 10px; }
   .swap-panel .pill-btn[disabled]{ opacity:0.4; }
   .add-today{ margin-top:4px; margin-bottom:16px; }
+  .add-row{ display:flex; gap:8px; margin:4px 0 16px; }
+  .add-row .add-btn{ flex:1; min-width:0; margin:0; }
+  .add-fields.two{ grid-template-columns:1fr 1fr; }
+  .rest-day-add{ padding-bottom:20px; }
+  .rest-train{ margin-top:18px; font-size:12px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-faint); }
   .add-panel{ margin:4px 0 16px; }
   .add-fields{ display:grid; grid-template-columns:0.8fr 1fr 1.2fr; gap:8px; margin-top:4px; }
   .add-fields .edit-field{ display:flex; flex-direction:column; gap:4px; min-width:0; }
@@ -1947,6 +1952,17 @@
     });
     return day;
   }
+  /* Cardio added for a single date: cardioExtras:[{ key, name, kind, target }] on the log. */
+  function applyCardioExtras(day, extras){
+    if(!Array.isArray(extras)) return day;
+    extras.forEach(function(x){
+      if(!x || !x.key) return;
+      var have = day.cardio.filter(function(c){ return c.key === x.key; })[0];
+      if(have){ have.added = true; return; }
+      day.cardio.push(Object.assign({}, x, { added:true }));
+    });
+    return day;
+  }
   var extraExercises = {};  /* swapped-in exercises seen in your logs, for Progress */
   function allExercises(){
     var seen = {}, list = [];
@@ -2014,6 +2030,7 @@
     if(saved.swaps) base.swaps = saved.swaps;
     if(Array.isArray(saved.extras) && saved.extras.length) base.extras = saved.extras;
     if(saved.cardioSwaps && Object.keys(saved.cardioSwaps).length) base.cardioSwaps = saved.cardioSwaps;
+    if(Array.isArray(saved.cardioExtras) && saved.cardioExtras.length) base.cardioExtras = saved.cardioExtras;
     if(saved.dayFrom != null) base.dayFrom = saved.dayFrom;
     if(saved.customTitle) base.customTitle = saved.customTitle;
     if(Array.isArray(saved.order)){
@@ -2036,6 +2053,7 @@
     var saved = await store.getDoc(dateStr);
     currentDayPlan = applyExtras(applySwaps(dayPlanFor(saved, dateStr, currentDow), saved && saved.swaps), saved && saved.extras);
     applyCardioSwaps(currentDayPlan, saved && saved.cardioSwaps);
+    applyCardioExtras(currentDayPlan, saved && saved.cardioExtras);
     cardioSwapOpen = null;
     swapOpen = null;
     addOpen = false;
@@ -2144,8 +2162,8 @@
 
   function switchDay(target){
     if(target === effectiveDow()) return;
-    if(isCustomDay() && !logHasActivity(currentLog) && (currentLog.extras || []).length &&
-       !confirm("Leave " + (currentDayPlan.title || "your new workout") + "? The exercises you added will be removed.")) return;
+    if(!logHasActivity(currentLog) && ((currentLog.extras || []).length || (currentLog.cardioExtras || []).length) &&
+       !confirm("Leave " + (currentDayPlan.title || "this workout") + "? What you added for today will be removed.")) return;
     if(logHasActivity(currentLog) && !confirm("You've logged sets for " + (currentDayPlan.title || "today's workout") + ". Switching clears them. Switch anyway?")) return;
     var from = target === currentDow ? null : target;
     currentDayPlan = clone(normaliseDay(activeDays()[target]));
@@ -2165,15 +2183,15 @@
   function startCustomWorkout(title){
     title = String(title || "").trim() || "New workout";
     if(logHasActivity(currentLog) && !confirm("You've logged sets for " + (currentDayPlan.title || "today's workout") + ". Starting a new workout clears them. Continue?")) return;
-    if(!logHasActivity(currentLog) && isCustomDay() && (currentLog.extras || []).length &&
-       !confirm("Replace " + (currentDayPlan.title || "your new workout") + "? The exercises you added will be removed.")) return;
+    if(!logHasActivity(currentLog) && ((currentLog.extras || []).length || (currentLog.cardioExtras || []).length) &&
+       !confirm("Replace " + (currentDayPlan.title || "this workout") + "? What you added for today will be removed.")) return;
     currentDayPlan = { title: title, exercises:[], cardio:[] };
     currentLog = mergeLog({ dayFrom:"custom", customTitle:title }, currentDate, currentDow, currentDayPlan);
     collapsed = {};
     swapOpen = null;
     cardioSwapOpen = null;
     missedInfo = null;
-    addOpen = true;
+    addOpen = "ex";
     scheduleSave();
     renderHeader();
     render();
@@ -2431,7 +2449,7 @@
     if(activeTab !== "today") return;
     var t;
     if(e.target.closest("[data-add-open]")){
-      addOpen = true; swapOpen = null; render();
+      addOpen = "ex"; swapOpen = null; cardioSwapOpen = null; render();
       var pick = content.querySelector("[data-add-pick]");
       if(pick){ pick.scrollIntoView({ block:"center", behavior:"smooth" }); pick.focus(); }
       return;
@@ -2580,6 +2598,106 @@
     if((t = e.target.closest("[data-cskip]"))){ toggleCardioSkip(t.dataset.cskip); return; }
   });
 
+  /* ---------------- Add cardio for this date only ---------------- */
+  function addAreaHtml(){
+    if(addOpen === "cardio") return cardioAddPanelHtml();
+    if(addOpen) return addPanelHtml();
+    return '<div class="add-row"><button class="add-btn" data-add-open>+ Add exercise</button><button class="add-btn" data-cadd-open>+ Add cardio</button></div>';
+  }
+  function cardioAddPanelHtml(){
+    var h = '<div class="swap-panel add-panel" data-cadd-panel>';
+    h += '<label class="field-label" for="cadd-pick">Add cardio</label>';
+    h += '<select class="text-input name-select" id="cadd-pick" data-cadd-pick>';
+    h += '<option value="" selected disabled>Choose an activity…</option>';
+    CARDIO_LIBRARY.forEach(function(it){ h += '<option value="lib:' + it.key + '">' + esc(it.name) + '</option>'; });
+    h += '<option value="custom">Type my own…</option></select>';
+    h += '<input class="text-input name-input swap-custom" id="cadd-custom" placeholder="e.g. Padel, Hike" autocomplete="off" hidden />';
+    h += '<div class="add-fields two">';
+    h += '<label class="edit-field"><span class="field-label">Track</span><select class="text-input" id="cadd-kind">' +
+      CARDIO_KINDS.map(function(o){ return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join("") + '</select></label>';
+    h += '<label class="edit-field"><span class="field-label">Target</span><input class="text-input" id="cadd-target" placeholder="e.g. 5 km" autocomplete="off" /></label>';
+    h += '</div>';
+    h += '<p class="swap-hint">Only for ' + (currentDate === todayStr() ? 'today' : 'this ' + WEEKDAY_NAMES[currentDow]) + '. Your plan stays the same.</p>';
+    h += '<div class="plan-actions"><button class="pill-btn accent" data-cadd-confirm disabled>Add</button><button class="pill-btn" data-add-cancel>Cancel</button></div>';
+    h += '</div>';
+    return h;
+  }
+  function addCardioExtra(name, libKey, kind, target){
+    name = String(name || "").trim();
+    if(!name) return;
+    var key = libKey;
+    if(!key){
+      var lib = CARDIO_LIBRARY.filter(function(c){ return looseName(c.name) === looseName(name); })[0];
+      if(lib){ key = lib.key; name = lib.name; } else key = slugify(name);
+    }
+    var dup = currentDayPlan.cardio.filter(function(c){ return c.key === key || looseName(c.name) === looseName(name); })[0];
+    if(dup){ showToast(dup.name + " is already in this workout"); return; }
+    key = uniqueKey(currentDayPlan, key, null);
+    var item = { key:key, name:name, kind: kind || "distance", target: String(target || "").trim() };
+    currentLog.cardioExtras = (currentLog.cardioExtras || []).concat([item]);
+    currentDayPlan.cardio.push(Object.assign({}, item, { added:true }));
+    currentLog.cardio[key] = { value:"", done:false };
+    addOpen = false;
+    scheduleSave();
+    render();
+    var card = content.querySelector('[data-cardio-card="' + key + '"]');
+    if(card) card.scrollIntoView({ block:"center", behavior:"smooth" });
+    showToast("Added " + name);
+  }
+  function removeCardioExtra(key){
+    var c = currentDayPlan.cardio.filter(function(x){ return x.key === key; })[0];
+    if(!c) return;
+    if(cardioHasActivity(key) && !confirm("You've logged " + (c.name || "this activity") + ". Removing deletes it. Remove anyway?")) return;
+    currentDayPlan.cardio = currentDayPlan.cardio.filter(function(x){ return x.key !== key; });
+    currentLog.cardioExtras = (currentLog.cardioExtras || []).filter(function(x){ return x.key !== key; });
+    if(!currentLog.cardioExtras.length) delete currentLog.cardioExtras;
+    delete currentLog.cardio[key];
+    scheduleSave();
+    render();
+    showToast("Removed " + (c.name || "activity"));
+  }
+  function caddReady(panel){
+    var v = panel.querySelector("[data-cadd-pick]").value;
+    var ok = v === "custom" ? !!panel.querySelector("#cadd-custom").value.trim() : !!v;
+    panel.querySelector("[data-cadd-confirm]").disabled = !ok;
+  }
+  content.addEventListener("change", function(e){
+    if(activeTab !== "today" || !e.target.matches("[data-cadd-pick]")) return;
+    var panel = e.target.closest("[data-cadd-panel]");
+    var custom = panel.querySelector("#cadd-custom");
+    custom.hidden = e.target.value !== "custom";
+    var it = e.target.value.indexOf("lib:") === 0 && CARDIO_BY_KEY[e.target.value.slice(4)];
+    if(it) panel.querySelector("#cadd-kind").value = it.kind;
+    if(!custom.hidden) custom.focus();
+    caddReady(panel);
+  });
+  content.addEventListener("input", function(e){
+    if(activeTab !== "today" || e.target.id !== "cadd-custom") return;
+    caddReady(e.target.closest("[data-cadd-panel]"));
+  });
+  content.addEventListener("click", function(e){
+    if(activeTab !== "today") return;
+    var t;
+    if(e.target.closest("[data-cadd-open]")){
+      addOpen = "cardio"; swapOpen = null; cardioSwapOpen = null; render();
+      var pick = content.querySelector("[data-cadd-pick]");
+      if(pick){ pick.scrollIntoView({ block:"center", behavior:"smooth" }); pick.focus(); }
+      return;
+    }
+    if((t = e.target.closest("[data-cadd-confirm]"))){
+      var panel = t.closest("[data-cadd-panel]");
+      var v = panel.querySelector("[data-cadd-pick]").value;
+      var kind = panel.querySelector("#cadd-kind").value, target = panel.querySelector("#cadd-target").value;
+      if(v === "custom") addCardioExtra(panel.querySelector("#cadd-custom").value, "", kind, target);
+      else if(v.indexOf("lib:") === 0){
+        var it = CARDIO_BY_KEY[v.slice(4)];
+        if(it) addCardioExtra(it.name, it.key, kind, target);
+      }
+      return;
+    }
+    if((t = e.target.closest("[data-cextra-remove]"))){ removeCardioExtra(t.dataset.cextraRemove); return; }
+  });
+
   var swapOpen = null;
   function swapPanelHtml(ex){
     var h = '<div class="swap-panel" data-swap-panel="' + ex.key + '">';
@@ -2656,15 +2774,15 @@
       return;
     }
     if(plan.exercises.length === 0 && plan.cardio.length === 0 && isCustomDay()){
-      content.innerHTML = '<div class="tab-panel"><div class="custom-empty"><div class="big">' + esc(plan.title || "New workout") + '</div>Add the exercises you\'re doing today.</div>' +
-        (addOpen ? addPanelHtml() : '<button class="add-btn add-today" data-add-open>+ Add exercise</button>') + '</div>';
+      content.innerHTML = '<div class="tab-panel"><div class="custom-empty"><div class="big">' + esc(plan.title || "New workout") + '</div>Add the exercises and cardio you\'re doing today.</div>' +
+        addAreaHtml() + '</div>';
       return;
     }
     if(plan.exercises.length === 0 && plan.cardio.length === 0){
-      var rh = '<div class="tab-panel rest-day"><div class="big">Rest day</div>Full recovery — nothing logged here today.';
-      if(!addOpen) rh += '<div style="margin-top:20px"><button class="pill-btn" data-add-open>Train anyway? Add an exercise</button></div>';
-      rh += '</div>';
-      if(addOpen) rh = '<div class="tab-panel">' + addPanelHtml() + '</div>';
+      var rh = '<div class="tab-panel"><div class="rest-day rest-day-add"><div class="big">Rest day</div>Full recovery — nothing logged here today.';
+      if(!addOpen) rh += '<div class="rest-train">Train anyway?</div>';
+      rh += '</div>' + addAreaHtml() + '</div>';
+      if(addOpen) rh = '<div class="tab-panel">' + addAreaHtml() + '</div>';
       content.innerHTML = rh;
       return;
     }
@@ -2718,7 +2836,7 @@
       });
       html += '</div>';
     }
-    html += addOpen ? addPanelHtml() : '<button class="add-btn add-today" data-add-open>+ Add exercise</button>';
+    if(!plan.cardio.length || addOpen === "ex") html += addAreaHtml();
 
     if(plan.cardio.length){
       html += '<div class="section-label">Cardio</div>';
@@ -2729,6 +2847,7 @@
         html += '<div class="cinfo"><div class="cname">' + esc(c.name) + '</div>';
         if(c.target) html += '<div class="ctarget">' + esc(c.target) + '</div>';
         if(c.swappedFrom != null) html += '<span class="swap-note">Swapped this week &middot; usually ' + esc(c.swappedFrom || "another activity") + '</span>';
+        if(c.added && !isCustomDay()) html += '<span class="swap-note added-note">Added for this day only</span>';
         html += '</div>';
         if(cSkipped){
           html += '<span class="progress-chip skipped-chip">Skipped</span>';
@@ -2743,11 +2862,15 @@
         html += '</div>';
         if(cardioSwapOpen === c.key) html += cardioSwapPanelHtml(c);
         html += '<div class="skip-row">';
-        if(c.swappedFrom != null) html += '<button class="text-btn swap-btn undo" data-cswap-undo="' + c.key + '">Undo swap</button>';
-        else if(cardioSwapOpen !== c.key && !cSkipped) html += '<button class="text-btn swap-btn" data-cswap-open="' + c.key + '">Swap</button>';
-        html += '<button class="text-btn skip-btn' + (cSkipped ? ' undo' : '') + '" data-cskip="' + c.key + '">' + (cSkipped ? 'Unskip' : 'Skip') + '</button>';
+        if(c.added) html += '<button class="text-btn skip-btn" data-cextra-remove="' + c.key + '">Remove</button>';
+        else {
+          if(c.swappedFrom != null) html += '<button class="text-btn swap-btn undo" data-cswap-undo="' + c.key + '">Undo swap</button>';
+          else if(cardioSwapOpen !== c.key && !cSkipped) html += '<button class="text-btn swap-btn" data-cswap-open="' + c.key + '">Swap</button>';
+          html += '<button class="text-btn skip-btn' + (cSkipped ? ' undo' : '') + '" data-cskip="' + c.key + '">' + (cSkipped ? 'Unskip' : 'Skip') + '</button>';
+        }
         html += '</div></div>';
       });
+      if(addOpen !== "ex") html += addAreaHtml();
     }
 
     html += '</div>';
