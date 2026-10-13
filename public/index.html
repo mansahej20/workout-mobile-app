@@ -184,6 +184,12 @@
     padding:60px 20px;
     color:var(--text-dim);
   }
+  .custom-empty{ text-align:center; padding:28px 20px 18px; color:var(--text-dim); }
+  .custom-empty .big{ font-size:22px; font-weight:700; color:var(--text); margin-bottom:6px; }
+  .new-workout{ margin-top:6px; padding-top:12px; border-top:1px solid var(--border); }
+  .new-workout-row{ display:flex; gap:8px; margin-top:6px; }
+  .new-workout-row .text-input{ flex:1; min-width:0; }
+  .new-workout-row .pill-btn{ flex:0 0 auto; }
   .rest-day .big{
     font-size:22px;
     font-weight:700;
@@ -1885,6 +1891,8 @@
   function dayPlanFor(saved, dateStr, dow){
     /* A copy, so swaps for one day never leak into the saved plan. */
     if(saved && saved.plan && dateStr < todayStr()) return clone(normaliseDay(saved.plan));
+    /* "custom" = a one-off workout made for this date; its exercises live in extras. */
+    if(saved && saved.dayFrom === "custom") return { title: saved.customTitle || "Custom workout", exercises:[], cardio:[] };
     var from = (saved && saved.dayFrom != null) ? saved.dayFrom : dow;
     return clone(normaliseDay(activeDays()[from]));
   }
@@ -2007,6 +2015,7 @@
     if(Array.isArray(saved.extras) && saved.extras.length) base.extras = saved.extras;
     if(saved.cardioSwaps && Object.keys(saved.cardioSwaps).length) base.cardioSwaps = saved.cardioSwaps;
     if(saved.dayFrom != null) base.dayFrom = saved.dayFrom;
+    if(saved.customTitle) base.customTitle = saved.customTitle;
     if(Array.isArray(saved.order)){
       base.order = saved.order.filter(function(k){ return !!base.exercises[k]; });
     }
@@ -2061,9 +2070,10 @@
   function renderHeader(){
     var hasContent = currentDayPlan.exercises.length || currentDayPlan.cardio.length;
     planTitleLabel.textContent = currentDayPlan.title || (hasContent ? "Workout" : (plans.length ? "Rest" : "No plan yet"));
-    var moved = currentLog && currentLog.dayFrom != null && currentLog.dayFrom !== currentDow;
-    document.getElementById("day-from").textContent = moved ? " \u00b7 " + WEEKDAY_NAMES[currentLog.dayFrom].slice(0,3) + "'s" : "";
-    document.getElementById("day-caret").style.display = trainingDays().length ? "" : "none";
+    var custom = isCustomDay();
+    var moved = !custom && currentLog && currentLog.dayFrom != null && currentLog.dayFrom !== currentDow;
+    document.getElementById("day-from").textContent = custom ? " \u00b7 New" : moved ? " \u00b7 " + WEEKDAY_NAMES[currentLog.dayFrom].slice(0,3) + "'s" : "";
+    document.getElementById("day-caret").style.display = (plans.length || custom) ? "" : "none";
     dateInput.value = currentDate;
     var dd = document.getElementById("date-display");
     if(dd){
@@ -2121,6 +2131,7 @@
     var days = activeDays();
     return DAY_LIST.filter(function(d){ var x = normaliseDay(days[d]); return x.exercises.length || x.cardio.length; });
   }
+  function isCustomDay(){ return !!currentLog && currentLog.dayFrom === "custom"; }
   function effectiveDow(){ return (currentLog && currentLog.dayFrom != null) ? currentLog.dayFrom : currentDow; }
   function logHasActivity(log){
     if(!log) return false;
@@ -2133,6 +2144,8 @@
 
   function switchDay(target){
     if(target === effectiveDow()) return;
+    if(isCustomDay() && !logHasActivity(currentLog) && (currentLog.extras || []).length &&
+       !confirm("Leave " + (currentDayPlan.title || "your new workout") + "? The exercises you added will be removed.")) return;
     if(logHasActivity(currentLog) && !confirm("You've logged sets for " + (currentDayPlan.title || "today's workout") + ". Switching clears them. Switch anyway?")) return;
     var from = target === currentDow ? null : target;
     currentDayPlan = clone(normaliseDay(activeDays()[target]));
@@ -2148,10 +2161,34 @@
     showToast(from == null ? "Back to " + WEEKDAY_NAMES[currentDow] + "'s workout" : "Doing " + WEEKDAY_NAMES[target] + "'s " + dayTitle(target) + " today");
   }
 
+  /* Start a blank, one-off workout for this date and fill it with "Add exercise". */
+  function startCustomWorkout(title){
+    title = String(title || "").trim() || "New workout";
+    if(logHasActivity(currentLog) && !confirm("You've logged sets for " + (currentDayPlan.title || "today's workout") + ". Starting a new workout clears them. Continue?")) return;
+    if(!logHasActivity(currentLog) && isCustomDay() && (currentLog.extras || []).length &&
+       !confirm("Replace " + (currentDayPlan.title || "your new workout") + "? The exercises you added will be removed.")) return;
+    currentDayPlan = { title: title, exercises:[], cardio:[] };
+    currentLog = mergeLog({ dayFrom:"custom", customTitle:title }, currentDate, currentDow, currentDayPlan);
+    collapsed = {};
+    swapOpen = null;
+    cardioSwapOpen = null;
+    missedInfo = null;
+    addOpen = true;
+    scheduleSave();
+    renderHeader();
+    render();
+    var pick = content.querySelector("[data-add-pick]");
+    if(pick) pick.focus();
+    showToast("Started " + title);
+  }
+
   var daySheet = null;
   function openDaySheet(){
     var days = trainingDays();
-    if(!days.length) return;
+    if(!days.length && !plans.length && !isCustomDay()) return;
+    if(days.indexOf(currentDow) === -1 && effectiveDow() !== currentDow){
+      days = days.concat([currentDow]).sort(function(a, b){ return DAY_LIST.indexOf(a) - DAY_LIST.indexOf(b); });
+    }
     if(!daySheet){
       daySheet = document.createElement("div");
       daySheet.className = "sheet-backdrop";
@@ -2162,22 +2199,33 @@
       daySheet.addEventListener("click", function(e){
         var b = e.target.closest("[data-day-pick]");
         if(b){ closeDaySheet(); switchDay(+b.dataset.dayPick); return; }
+        if(e.target.closest("[data-new-start]")){ var ti = daySheet.querySelector("#new-title"); closeDaySheet(); startCustomWorkout(ti ? ti.value : ""); return; }
         if(e.target === daySheet || e.target.closest("[data-day-close]")) closeDaySheet();
       });
     }
     var cur = effectiveDow();
     var h = '<div class="sheet"><div class="sheet-title" id="day-sheet-title">Workout for ' + WEEKDAY_NAMES[currentDow] + '</div>';
-    h += '<p class="sheet-text">Missed a day? Do another day\'s workout instead. Only this date changes.</p><div class="day-opts">';
+    h += '<p class="sheet-text">Do another day\'s workout, or start a new one. Only this date changes.</p><div class="day-opts">';
+    if(isCustomDay()){
+      h += '<div class="day-opt on" aria-current="true"><span class="day-opt-day">New</span><span class="day-opt-name">' + esc(currentDayPlan.title || "Custom workout") + '</span><span class="day-opt-check" aria-hidden="true">&#10003;</span></div>';
+    }
     days.forEach(function(d){
       var on = d === cur;
       h += '<button class="day-opt' + (on ? ' on' : '') + '" data-day-pick="' + d + '" aria-pressed="' + on + '">';
-      h += '<span class="day-opt-day">' + WEEKDAY_NAMES[d].slice(0,3) + '</span><span class="day-opt-name">' + esc(dayTitle(d)) + '</span>';
+      var dx = normaliseDay(activeDays()[d]);
+      h += '<span class="day-opt-day">' + WEEKDAY_NAMES[d].slice(0,3) + '</span><span class="day-opt-name">' + esc((dx.exercises.length || dx.cardio.length) ? dayTitle(d) : "Rest") + '</span>';
       if(d === currentDow) h += '<span class="day-opt-tag">Usual</span>';
       if(on) h += '<span class="day-opt-check" aria-hidden="true">&#10003;</span>';
       h += '</button>';
     });
-    h += '</div><button class="text-btn sheet-btn" data-day-close>Cancel</button></div>';
+    h += '</div>';
+    h += '<div class="new-workout"><label class="field-label" for="new-title">' + (isCustomDay() ? 'Or start a different new workout' : 'Or start a new workout') + '</label>';
+    h += '<div class="new-workout-row"><input class="text-input" id="new-title" maxlength="40" placeholder="e.g. Arms &amp; Abs" autocomplete="off" />';
+    h += '<button class="pill-btn accent" data-new-start>Start</button></div></div>';
+    h += '<button class="text-btn sheet-btn" data-day-close>Cancel</button></div>';
     daySheet.innerHTML = h;
+    var nt = daySheet.querySelector("#new-title");
+    nt.addEventListener("keydown", function(e){ if(e.key === "Enter"){ e.preventDefault(); closeDaySheet(); startCustomWorkout(nt.value); } });
     requestAnimationFrame(function(){ daySheet.classList.add("show"); });
   }
   function closeDaySheet(){ if(daySheet) daySheet.classList.remove("show"); }
@@ -2607,6 +2655,11 @@
         '<div style="margin-top:20px"><button class="pill-btn accent" data-go-new-plan>Create a plan</button></div></div>';
       return;
     }
+    if(plan.exercises.length === 0 && plan.cardio.length === 0 && isCustomDay()){
+      content.innerHTML = '<div class="tab-panel"><div class="custom-empty"><div class="big">' + esc(plan.title || "New workout") + '</div>Add the exercises you\'re doing today.</div>' +
+        (addOpen ? addPanelHtml() : '<button class="add-btn add-today" data-add-open>+ Add exercise</button>') + '</div>';
+      return;
+    }
     if(plan.exercises.length === 0 && plan.cardio.length === 0){
       var rh = '<div class="tab-panel rest-day"><div class="big">Rest day</div>Full recovery — nothing logged here today.';
       if(!addOpen) rh += '<div style="margin-top:20px"><button class="pill-btn" data-add-open>Train anyway? Add an exercise</button></div>';
@@ -2634,7 +2687,7 @@
         html += '<div class="head-text"><span class="name">' + esc(ex.name || "Untitled exercise") + (ex.optional ? '<span class="optional-tag">Optional</span>' : '') + '</span>';
         html += '<span class="meta">' + ex.sets + ' x ' + esc(ex.reps) + ' &middot; rest ' + formatRestShort(ex.rest) + '</span>';
         if(ex.swappedFrom != null) html += '<span class="swap-note">Swapped this week &middot; usually ' + esc(ex.swappedFrom || "another exercise") + '</span>';
-        if(ex.added) html += '<span class="swap-note added-note">Added for this day only</span>';
+        if(ex.added && !isCustomDay()) html += '<span class="swap-note added-note">Added for this day only</span>';
         html += '</div>';
         if(skipped) html += '<span class="progress-chip skipped-chip">Skipped</span>';
         else html += '<span class="progress-chip' + (doneCount === log.sets.length ? ' complete' : '') + '">' + doneCount + '/' + log.sets.length + '</span>';
