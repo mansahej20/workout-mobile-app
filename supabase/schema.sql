@@ -53,7 +53,9 @@ create index if not exists workout_plans_user_idx on public.workout_plans (user_
 create table if not exists public.user_settings (
   user_id         uuid primary key references auth.users (id) on delete cascade default auth.uid(),
   active_plan_id  uuid references public.workout_plans (id) on delete set null,
-  updated_at      timestamptz not null default now()
+  avatar          text,  -- profile photo as a small JPEG data URL (see 004_avatar.sql)
+  updated_at      timestamptz not null default now(),
+  constraint user_settings_avatar_size check (avatar is null or (length(avatar) < 300000 and avatar like 'data:image/%'))
 );
 
 alter table public.workout_plans enable row level security;

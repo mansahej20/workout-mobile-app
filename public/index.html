@@ -1084,6 +1084,23 @@
     color:#121212; font-size:38px; font-weight:700;
     box-shadow:var(--shadow-heavy);
   }
+  .avatar-btn img, .avatar-lg img{ width:100%; height:100%; border-radius:50%; object-fit:cover; display:block; }
+  .avatar-btn, .avatar-lg{ overflow:hidden; }
+  .avatar-edit{ position:relative; padding:0; border:0; background:none; border-radius:50%; cursor:pointer; transition:transform 140ms var(--ease-out); }
+  .avatar-edit:active{ transform:scale(0.95); }
+  .avatar-edit:focus-visible{ outline:none; box-shadow:0 0 0 2px var(--bg), 0 0 0 4px var(--text); }
+  .avatar-cam{
+    position:absolute; right:-2px; bottom:-2px; width:30px; height:30px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--accent); color:#0b1a10; box-shadow:0 0 0 3px var(--bg);
+  }
+  .avatar-links{ display:flex; gap:18px; margin-top:-4px; }
+  .crop-sheet{ align-items:center; }
+  .crop-sheet .sheet-title, .crop-sheet .sheet-text{ align-self:stretch; }
+  .crop-canvas{ width:260px; height:260px; border-radius:16px; touch-action:none; cursor:grab; background:#121212; }
+  .crop-zoom-row{ display:flex; align-items:center; gap:12px; width:260px; color:var(--text-dim); font-size:18px; font-weight:700; margin:8px 0 4px; }
+  .crop-zoom-row input{ flex:1; accent-color:var(--accent); }
+  .crop-actions{ align-self:stretch; justify-content:center; }
   .profile-email{ font-size:16px; font-weight:700; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .profile-panel .sound-card{ margin-top:16px; }
 
@@ -1551,6 +1568,8 @@
     SETTINGS_CACHE_KEY = ns + "settings";
     PLAN_QUEUE_KEY = ns + "pendingPlans";
     SETTINGS_PENDING_KEY = ns + "pendingSettings";
+    AVATAR_KEY = ns + "avatar";
+    AVATAR_PENDING_KEY = ns + "pendingAvatar";
   }
   function hasUnsynced(){
     return pendingGet().length > 0 || planQueueGet().length > 0 || settingsPending();
@@ -1567,6 +1586,13 @@
   var SETTINGS_CACHE_KEY = "setlog:settings";
   var PLAN_QUEUE_KEY = "setlog:pendingPlans";
   var SETTINGS_PENDING_KEY = "setlog:pendingSettings";
+  var AVATAR_KEY = "setlog:avatar", AVATAR_PENDING_KEY = "setlog:pendingAvatar";
+  /* Profile photo: a small JPEG data URL, cached on the phone and synced to user_settings.avatar. */
+  var currentAvatar = null;
+  function localAvatar(){ try{ return localStorage.getItem(AVATAR_KEY) || null; }catch(e){ return null; } }
+  function setLocalAvatar(v){ try{ if(v) localStorage.setItem(AVATAR_KEY, v); else localStorage.removeItem(AVATAR_KEY); }catch(e){} currentAvatar = v || null; }
+  function avatarPending(){ try{ return localStorage.getItem(AVATAR_PENDING_KEY) === "1"; }catch(e){ return false; } }
+  function setAvatarPending(v){ try{ if(v) localStorage.setItem(AVATAR_PENDING_KEY, "1"); else localStorage.removeItem(AVATAR_PENDING_KEY); }catch(e){} }
   function readJSON(key, fallback){
     try{ var raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }catch(e){ return fallback; }
   }
@@ -1624,6 +1650,20 @@
       if(res.error) throw res.error;
     }
 
+    var avatarColumnMissing = false;
+    async function pushAvatar(){
+      var res = await client.from("user_settings").upsert(
+        { user_id: userId, avatar: localAvatar(), updated_at: new Date().toISOString() },
+        { onConflict: "user_id" }
+      );
+      if(res.error){
+        var msg = String(res.error.message || "") + " " + String(res.error.code || "");
+        if(/avatar|PGRST204|42703/.test(msg)) avatarColumnMissing = true;
+        throw res.error;
+      }
+      avatarColumnMissing = false;
+    }
+
     function enqueuePlan(op){
       var q = planQueueGet().filter(function(o){ return o.id !== op.id; });
       q.push(op);
@@ -1655,7 +1695,11 @@
         }
       }catch(e){
         /* still offline or a transient error: keep the queue, retry later */
-      }finally{
+      }
+      try{
+        if(avatarPending()){ await pushAvatar(); setAvatarPending(false); }
+      }catch(e){ /* kept on this phone; retried later */ }
+      finally{
         flushing = false;
       }
     }
@@ -1739,6 +1783,27 @@
         writeJSON(PLANS_CACHE_KEY, all);
         enqueuePlan({ op:"delete", id: id });
         await flushPending();
+      },
+      async getAvatar(){
+        var local = localAvatar();
+        if(avatarPending()) return local;
+        try{
+          var res = await client.from("user_settings").select("avatar").eq("user_id", userId).maybeSingle();
+          if(res.error) throw res.error;
+          var v = (res.data && res.data.avatar) || null;
+          setLocalAvatar(v);
+          return v;
+        }catch(e){
+          return local;
+        }
+      },
+      /* Returns "synced", "local" (offline, will retry) or "no-column" (database not updated yet). */
+      async saveAvatar(dataUrl){
+        setLocalAvatar(dataUrl);
+        setAvatarPending(true);
+        await flushPending();
+        if(!avatarPending()) return "synced";
+        return avatarColumnMissing ? "no-column" : "local";
       },
       async setActivePlan(id){
         writeJSON(SETTINGS_CACHE_KEY, { activePlanId: id });
@@ -3827,16 +3892,164 @@
     return AVATAR_COLOURS[h % AVATAR_COLOURS.length];
   }
   function avatarHtml(cls, clickable){
-    var inner = esc(avatarLetter());
-    var style = ' style="background:' + avatarColour() + '"';
+    var inner = currentAvatar ? '<img src="' + currentAvatar + '" alt="" draggable="false" />' : esc(avatarLetter());
+    var style = ' style="background:' + (currentAvatar ? 'var(--surface-2)' : avatarColour()) + '"';
     if(clickable) return '<button class="' + cls + '" data-open-profile aria-label="Profile and settings"' + style + '>' + inner + '</button>';
     return '<div class="' + cls + '" aria-hidden="true"' + style + '>' + inner + '</div>';
   }
   function updateHeaderAvatar(){
     var el = document.getElementById("header-avatar");
     if(!el) return;
-    el.textContent = avatarLetter();
-    el.style.background = avatarColour();
+    if(currentAvatar){
+      el.innerHTML = '<img src="' + currentAvatar + '" alt="" draggable="false" />';
+      el.style.background = "var(--surface-2)";
+    } else {
+      el.textContent = avatarLetter();
+      el.style.background = avatarColour();
+    }
+  }
+
+  /* ---------------- Profile photo: pick, crop to a circle, save ---------------- */
+  var cropSheet = null, crop = null;
+  var CROP_VIEW = 260, AVATAR_PX = 320;
+  function pickAvatar(){
+    var inp = document.createElement("input");
+    inp.type = "file"; inp.accept = "image/*";
+    inp.style.position = "fixed"; inp.style.left = "-9999px";
+    document.body.appendChild(inp);
+    inp.addEventListener("change", function(){
+      var f = inp.files && inp.files[0];
+      document.body.removeChild(inp);
+      if(f) openCropper(f);
+    });
+    inp.click();
+  }
+  function openCropper(file){
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){
+      /* shrink big phone photos once so dragging stays smooth */
+      var max = 1400, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      var src = document.createElement("canvas");
+      src.width = Math.max(1, Math.round(img.naturalWidth * k));
+      src.height = Math.max(1, Math.round(img.naturalHeight * k));
+      src.getContext("2d").drawImage(img, 0, 0, src.width, src.height);
+      URL.revokeObjectURL(url);
+      var base = Math.max(CROP_VIEW / src.width, CROP_VIEW / src.height);
+      crop = { src: src, base: base, zoom: 1, x: 0, y: 0, pointers: {}, pinch: null };
+      showCropSheet();
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); showToast("Couldn't open that photo. Try another one."); };
+    img.src = url;
+  }
+  function clampCrop(){
+    var sc = crop.base * crop.zoom;
+    var mx = Math.max(0, (crop.src.width * sc - CROP_VIEW) / 2), my = Math.max(0, (crop.src.height * sc - CROP_VIEW) / 2);
+    crop.x = Math.max(-mx, Math.min(mx, crop.x));
+    crop.y = Math.max(-my, Math.min(my, crop.y));
+  }
+  function drawCrop(ctx, size, overlay){
+    var f = size / CROP_VIEW, sc = crop.base * crop.zoom * f;
+    var w = crop.src.width * sc, h = crop.src.height * sc;
+    ctx.fillStyle = "#121212";
+    ctx.fillRect(0, 0, size, size);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(crop.src, size/2 + crop.x*f - w/2, size/2 + crop.y*f - h/2, w, h);
+    if(overlay){
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.beginPath();
+      ctx.rect(0, 0, size, size);
+      ctx.arc(size/2, size/2, size/2 - 1*f, 0, Math.PI*2, true);
+      ctx.fill("evenodd");
+      ctx.strokeStyle = "rgba(255,255,255,0.85)";
+      ctx.lineWidth = 2 * f;
+      ctx.beginPath(); ctx.arc(size/2, size/2, size/2 - 2*f, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+  function renderCrop(){
+    var cv = cropSheet && cropSheet.querySelector("#crop-canvas");
+    if(!cv || !crop) return;
+    var dpr = Math.min(3, window.devicePixelRatio || 1), size = Math.round(CROP_VIEW * dpr);
+    if(cv.width !== size){ cv.width = size; cv.height = size; }
+    drawCrop(cv.getContext("2d"), size, true);
+  }
+  function setZoom(z){
+    crop.zoom = Math.max(1, Math.min(4, z));
+    clampCrop();
+    var sl = cropSheet.querySelector("#crop-zoom");
+    if(sl) sl.value = String(crop.zoom);
+    renderCrop();
+  }
+  function showCropSheet(){
+    if(!cropSheet){
+      cropSheet = document.createElement("div");
+      cropSheet.className = "sheet-backdrop";
+      cropSheet.setAttribute("role", "dialog");
+      cropSheet.setAttribute("aria-modal", "true");
+      cropSheet.setAttribute("aria-labelledby", "crop-title");
+      document.body.appendChild(cropSheet);
+      cropSheet.addEventListener("click", function(e){
+        if(e.target.closest("[data-crop-save]")){ saveCrop(); return; }
+        if(e.target === cropSheet || e.target.closest("[data-crop-cancel]")) closeCropSheet();
+      });
+      cropSheet.addEventListener("input", function(e){ if(e.target.id === "crop-zoom") setZoom(parseFloat(e.target.value)); });
+    }
+    cropSheet.innerHTML = '<div class="sheet crop-sheet"><div class="sheet-title" id="crop-title">Move and zoom</div>' +
+      '<p class="sheet-text">Drag to position your photo. Pinch or use the slider to zoom.</p>' +
+      '<canvas id="crop-canvas" class="crop-canvas" width="' + CROP_VIEW + '" height="' + CROP_VIEW + '" aria-label="Photo preview"></canvas>' +
+      '<label class="crop-zoom-row"><span aria-hidden="true">&minus;</span><input id="crop-zoom" type="range" min="1" max="4" step="0.01" value="1" aria-label="Zoom" /><span aria-hidden="true">+</span></label>' +
+      '<div class="plan-actions crop-actions"><button class="pill-btn accent" data-crop-save>Use photo</button><button class="pill-btn" data-crop-cancel>Cancel</button></div></div>';
+    var cv = cropSheet.querySelector("#crop-canvas");
+    cv.addEventListener("pointerdown", function(e){
+      cv.setPointerCapture(e.pointerId);
+      crop.pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      var ids = Object.keys(crop.pointers);
+      if(ids.length === 2){
+        var a = crop.pointers[ids[0]], b = crop.pointers[ids[1]];
+        crop.pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, zoom: crop.zoom };
+      }
+    });
+    cv.addEventListener("pointermove", function(e){
+      var p = crop.pointers[e.pointerId];
+      if(!p) return;
+      var ids = Object.keys(crop.pointers);
+      if(ids.length >= 2 && crop.pinch){
+        p.x = e.clientX; p.y = e.clientY;
+        var a = crop.pointers[ids[0]], b = crop.pointers[ids[1]];
+        setZoom(crop.pinch.zoom * (Math.hypot(a.x - b.x, a.y - b.y) / crop.pinch.d));
+        return;
+      }
+      crop.x += e.clientX - p.x; crop.y += e.clientY - p.y;
+      p.x = e.clientX; p.y = e.clientY;
+      clampCrop(); renderCrop();
+    });
+    function up(e){ delete crop.pointers[e.pointerId]; if(Object.keys(crop.pointers).length < 2) crop.pinch = null; }
+    cv.addEventListener("pointerup", up);
+    cv.addEventListener("pointercancel", up);
+    cv.addEventListener("wheel", function(e){ e.preventDefault(); setZoom(crop.zoom * (e.deltaY < 0 ? 1.08 : 1/1.08)); }, { passive:false });
+    renderCrop();
+    requestAnimationFrame(function(){ cropSheet.classList.add("show"); });
+  }
+  function closeCropSheet(){ if(cropSheet) cropSheet.classList.remove("show"); crop = null; }
+  async function saveCrop(){
+    if(!crop) return;
+    var out = document.createElement("canvas");
+    out.width = AVATAR_PX; out.height = AVATAR_PX;
+    drawCrop(out.getContext("2d"), AVATAR_PX, false);
+    var data = out.toDataURL("image/jpeg", 0.85);
+    closeCropSheet();
+    await applyAvatar(data);
+  }
+  async function applyAvatar(data){
+    currentAvatar = data;
+    updateHeaderAvatar();
+    if(activeTab === "profile") render();
+    var r = await store.saveAvatar(data);
+    if(r === "synced") showToast(data ? "Profile photo updated" : "Photo removed");
+    else if(r === "no-column") showToast("Saved on this phone. It will sync once the database is updated.");
+    else showToast(data ? "Photo saved. Syncing when online." : "Photo removed. Syncing when online.");
   }
 
   function setTabUi(tab){
@@ -3866,8 +4079,11 @@
   function renderProfile(){
     var html = '<div class="tab-panel profile-panel">';
     html += '<div class="editor-top"><button class="icon-btn" data-close-profile aria-label="Back">&#8249;</button><h2 class="profile-title">Profile</h2></div>';
-    html += '<div class="profile-hero">' + avatarHtml("avatar-lg", false) +
-            '<div class="profile-email">' + esc(currentUserEmail || "Signed in") + '</div></div>';
+    html += '<div class="profile-hero"><button class="avatar-edit" data-avatar-pick aria-label="' + (currentAvatar ? 'Change profile photo' : 'Add profile photo') + '">' +
+            avatarHtml("avatar-lg", false) + '<span class="avatar-cam" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M9 4.5 7.6 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2.6L15 4.5H9Zm3 4a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Zm0 2a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5Z"/></svg></span></button>' +
+            '<div class="profile-email">' + esc(currentUserEmail || "Signed in") + '</div>' +
+            '<div class="avatar-links"><button class="text-btn" data-avatar-pick>' + (currentAvatar ? 'Change photo' : 'Add photo') + '</button>' +
+            (currentAvatar ? '<button class="text-btn" data-avatar-remove>Remove</button>' : '') + '</div></div>';
     html += restAlertsCardHtml();
     html += timerSoundCardHtml();
     html += '<div class="card account-card">';
@@ -3926,6 +4142,8 @@
       return;
     }
     if((t = e.target.closest("[data-signout]"))){ signOut(); return; }
+    if(e.target.closest("[data-avatar-pick]")){ pickAvatar(); return; }
+    if(e.target.closest("[data-avatar-remove]")){ if(confirm("Remove your profile photo?")) applyAvatar(null); return; }
     if((t = e.target.closest("[data-alarm-mode]"))){
       setAlarmMode(t.dataset.alarmMode);
       content.querySelectorAll("[data-alarm-mode]").forEach(function(b){
@@ -4693,7 +4911,14 @@
       return;
     }
     updateSyncDot();
+    currentAvatar = localAvatar();
     updateHeaderAvatar();
+    var shownAvatar = currentAvatar;
+    store.getAvatar().then(function(v){
+      if(v === shownAvatar) return;
+      currentAvatar = v; updateHeaderAvatar();
+      if(activeTab === "profile" || activeTab === "plans") render();
+    });
     restoreTimer();
     autoEnablePush();
     var loaded = await store.loadPlans();
