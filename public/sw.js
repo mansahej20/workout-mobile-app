@@ -1,7 +1,7 @@
 // Minimal service worker: keeps the app shell available with no signal.
 // Supabase requests are never cached; the app handles offline writes itself.
 const CACHE = "setlog-__BUILD_ID__";
-const SHELL = ["/", "/index.html", "/config.js", "/manifest.webmanifest", "/icons/icon.svg"];
+const SHELL = ["/", "/index.html", "/config.js", "/manifest.webmanifest", "/icons/favicon-32.png", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
