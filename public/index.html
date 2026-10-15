@@ -1251,27 +1251,29 @@
     transition:opacity 260ms var(--ease-out);
   }
   #splash.hide{ opacity:0; pointer-events:none; }
-  .splash-logo{
-    display:inline-flex; flex-direction:column; align-items:center;
-    font-size:46px; font-weight:700; line-height:1;
-    margin-top:-6vh;
-  }
-  .splash-bar{
-    display:block; color:var(--accent); overflow:visible; opacity:0;
-    width:calc(100% + 0.5em); height:0.6em; margin:0 -0.25em 0.08em;
-    will-change:transform;
-  }
+  .splash-logo{ display:flex; flex-direction:column; align-items:center; margin-top:-6vh; }
+  .splash-mark{ width:136px; height:auto; overflow:visible; color:var(--accent); animation:spLift 460ms cubic-bezier(0.37,0,0.63,1) 980ms both; }
+  .splash-mark .sp-r{ transform-box:fill-box; transform-origin:50% 50%; animation:spR 480ms cubic-bezier(0.23,1,0.32,1) both; }
+  .splash-mark .sp-in-l{ animation:spInL 520ms cubic-bezier(0.16,1,0.3,1) 300ms both; }
+  .splash-mark .sp-in-r{ animation:spInR 520ms cubic-bezier(0.16,1,0.3,1) 300ms both; }
+  .splash-mark .sp-out-l{ animation:spOutL 520ms cubic-bezier(0.16,1,0.3,1) 470ms both; }
+  .splash-mark .sp-out-r{ animation:spOutR 520ms cubic-bezier(0.16,1,0.3,1) 470ms both; }
+  @keyframes spR{ from{ opacity:0; transform:scale(0.8); } to{ opacity:1; transform:none; } }
+  @keyframes spInL{ from{ opacity:0; transform:translateX(-260px); } 30%{ opacity:1; } to{ opacity:1; transform:none; } }
+  @keyframes spInR{ from{ opacity:0; transform:translateX(260px); } 30%{ opacity:1; } to{ opacity:1; transform:none; } }
+  @keyframes spOutL{ from{ opacity:0; transform:translateX(-300px); } 30%{ opacity:1; } to{ opacity:1; transform:none; } }
+  @keyframes spOutR{ from{ opacity:0; transform:translateX(300px); } 30%{ opacity:1; } to{ opacity:1; transform:none; } }
+  /* one rep: lift, then set it down with a small settle */
+  @keyframes spLift{ 0%{ transform:none; } 40%{ transform:translateY(-14px); } 75%{ transform:translateY(2px); } 100%{ transform:none; } }
   .splash-word{
-    color:var(--text); text-transform:uppercase;
-    letter-spacing:0.05em; margin-right:-0.05em;
-    animation:splashWord 560ms cubic-bezier(0.23,1,0.32,1) both;
+    margin-top:22px; color:var(--text);
+    font-size:20px; font-weight:700; line-height:1; text-transform:uppercase;
+    letter-spacing:0.32em; margin-right:-0.32em;
+    animation:spWord 520ms cubic-bezier(0.23,1,0.32,1) 820ms both;
   }
-  @keyframes splashWord{
-    from{ letter-spacing:-0.32em; opacity:0; transform:scale(0.9); }
-    to{ letter-spacing:0.05em; opacity:1; transform:none; }
-  }
+  @keyframes spWord{ from{ opacity:0; letter-spacing:0.6em; transform:translateY(6px); } to{ opacity:1; letter-spacing:0.32em; transform:none; } }
   @media (prefers-reduced-motion: reduce){
-    .splash-word{ animation:none; }
+    .splash-mark, .splash-mark *, .splash-word{ animation:none !important; }
   }
 
   /* Workout name under the date: tap to do another day's workout */
@@ -1322,70 +1324,32 @@
 <body>
 <div id="splash" aria-hidden="true">
   <div class="splash-logo">
-    <svg class="splash-bar" id="splash-bar" viewBox="0 0 92 14" preserveAspectRatio="none">
-      <path id="sp-bar" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-      <g fill="currentColor"><rect id="sp-p0" rx="0.7"/><rect id="sp-p1" rx="0.7"/><rect id="sp-p2" rx="0.7"/><rect id="sp-p3" rx="0.7"/></g>
+    <svg class="splash-mark" viewBox="300 342 654 530" role="img" aria-label="Repped">
+      <g fill="currentColor">
+        <g class="sp-r">
+          <path d="M381 362 H720 C792 362 850 414 858 485 H822 Q795 485 795 512 V595 C775 615 748 627 717 627 H466 V562 H687 C717 562 741 538 741 507.5 C741 477 717 453 687 453 H381 Z"/>
+          <path d="M552 656 H704 L862 853 H715 Z"/>
+          <rect x="381" y="733" width="120" height="120"/>
+        </g>
+        <rect class="sp-out-l" x="320" y="528" width="44" height="144" rx="7"/>
+        <rect class="sp-in-l" x="381" y="489" width="63" height="221" rx="7"/>
+        <rect class="sp-in-r" x="817" y="509" width="56" height="201" rx="7"/>
+        <rect class="sp-out-r" x="890" y="528" width="44" height="144" rx="7"/>
+      </g>
     </svg>
     <div class="splash-word">Repped</div>
   </div>
 </div>
 <script>
-/* Loading screen: the word opens out, then the barbell drops onto it,
-   bends on impact, bounces and settles bent (the same shape as the logo).
-   It stays until the app has loaded, and at least until the animation ends. */
+/* Loading screen: the R appears, the plates slide onto the bar from both sides,
+   the logo does one "rep", then the name fades in. It stays until the app has
+   loaded, and at least until the animation ends. */
 (function(){
   var splash = document.getElementById("splash");
-  var svg = document.getElementById("splash-bar");
-  var bar = document.getElementById("sp-bar");
-  var plates = [0,1,2,3].map(function(i){ return document.getElementById("sp-p" + i); });
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  /* k = how far the bar is bent: 0 straight, 1 the logo's resting bend */
-  function draw(k){
-    var P0 = [11, 10.4], P2 = [81, 10.4], P1 = [46, 10.4 - 8.6*k];
-    function unit(a, b){ var dx = b[0]-a[0], dy = b[1]-a[1], l = Math.hypot(dx, dy) || 1; return [dx/l, dy/l]; }
-    var d0 = unit(P0, P1), d1 = unit(P1, P2), S = 8.2;
-    var L = [P0[0]-d0[0]*S, P0[1]-d0[1]*S], R = [P2[0]+d1[0]*S, P2[1]+d1[1]*S];
-    bar.setAttribute("d", "M" + L[0] + " " + L[1] + " L" + P0[0] + " " + P0[1] + " Q" + P1[0] + " " + P1[1] + " " + P2[0] + " " + P2[1] + " L" + R[0] + " " + R[1]);
-    var a0 = Math.atan2(d0[1], d0[0]) * 180/Math.PI, a1 = Math.atan2(d1[1], d1[0]) * 180/Math.PI;
-    var spec = [[P0, d0, -4.6, 2.9, 10.2, a0], [P0, d0, -1.4, 2.4, 7.2, a0], [P2, d1, 4.6, 2.9, 10.2, a1], [P2, d1, 1.4, 2.4, 7.2, a1]];
-    spec.forEach(function(p, i){
-      var x = p[0][0] + p[1][0]*p[2], y = p[0][1] + p[1][1]*p[2];
-      var r = plates[i];
-      r.setAttribute("x", x - p[3]/2); r.setAttribute("y", y - p[4]/2);
-      r.setAttribute("width", p[3]); r.setAttribute("height", p[4]);
-      r.setAttribute("transform", "rotate(" + p[5] + " " + x + " " + y + ")");
-    });
-  }
-
-  var FALL_AT = 380, FALL_MS = 320, SETTLE_MS = 760;
-  var END = FALL_AT + FALL_MS + SETTLE_MS;
-  var t0 = performance.now(), animDone = false, appReady = false, hidden = false, dropFrom = -160;
-
-  function frame(){
-    var t = performance.now() - t0;
-    if(t < FALL_AT){
-      svg.style.opacity = "0";
-    } else if(t < FALL_AT + FALL_MS){
-      if(svg.style.opacity !== "1"){
-        svg.style.opacity = "1";
-        dropFrom = -(svg.getBoundingClientRect().top + 60);
-      }
-      var f = (t - FALL_AT) / FALL_MS;
-      svg.style.transform = "translateY(" + (dropFrom * (1 - f*f)) + "px)";   /* gravity: speeds up as it falls */
-      draw(0.12);
-    } else {
-      var dt = t - FALL_AT - FALL_MS;
-      /* bends past its resting shape on impact, springs back and settles at 1 */
-      var k = 1 - 0.88 * Math.exp(-dt/150) * Math.cos(2*Math.PI*dt/260);
-      var y = -12 * Math.exp(-dt/150) * Math.abs(Math.sin(Math.PI*dt/210));
-      if(dt >= SETTLE_MS){ k = 1; y = 0; }
-      draw(k);
-      svg.style.transform = "translateY(" + y + "px)";
-      if(dt >= SETTLE_MS){ animDone = true; maybeHide(); return; }
-    }
-    requestAnimationFrame(frame);
-  }
+  var END = reduce ? 300 : 1450;
+  var animDone = false, appReady = false, hidden = false;
+  setTimeout(function(){ animDone = true; maybeHide(); }, END);
 
   function maybeHide(){
     if(hidden || !animDone || !appReady) return;
@@ -1398,12 +1362,6 @@
   /* never block the app if something goes wrong */
   setTimeout(function(){ animDone = true; appReady = true; maybeHide(); }, 6000);
 
-  if(reduce){
-    draw(1); svg.style.opacity = "1"; animDone = true;
-  } else {
-    draw(0.12);
-    requestAnimationFrame(frame);
-  }
 })();
 </script>
 <div id="auth-screen">
