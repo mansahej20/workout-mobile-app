@@ -1488,6 +1488,13 @@
     probe.parentNode.removeChild(probe);
     return h;
   }
+  /* Is something focused that brings up the keyboard? */
+  function typing(){
+    var a = document.activeElement;
+    if(!a) return false;
+    if(a.isContentEditable || a.tagName === "TEXTAREA") return true;
+    return a.tagName === "INPUT" && !/^(button|checkbox|radio|range|file|submit|reset|color|image)$/i.test(a.type || "");
+  }
   function fitToScreen(){
     var root = document.documentElement;
     var standalone = (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
@@ -1495,7 +1502,10 @@
     var full = portrait ? Math.max(screen.width, screen.height) : Math.min(screen.width, screen.height);
     var target = window.innerHeight;
     var gap = full - window.innerHeight;
-    if(standalone && gap > 0 && gap <= 80) target = full;   /* page laid out short */
+    /* Page laid out short. A small gap is the status-bar bug. A big gap is either the
+       keyboard (something is focused) or iOS forgetting to grow back after the keyboard
+       closed (nothing focused) -- in that case fill the screen again. */
+    if(standalone && gap > 0 && (gap <= 80 || !typing())) target = full;
     var dvh = measureDvh();
     if(target - dvh > 1){                                   /* 100dvh short of the real height */
       root.style.setProperty("--app-h", target + "px");
@@ -1508,6 +1518,21 @@
   fitToScreen();
   window.addEventListener("resize", fitToScreen);
   window.addEventListener("orientationchange", function(){ setTimeout(fitToScreen, 300); });
+  /* The keyboard closing doesn't always fire a resize on iPhone, so re-check
+     a few times after leaving a field, and undo any scroll iOS left behind. */
+  function afterKeyboard(){
+    [60, 320, 700].forEach(function(ms){
+      setTimeout(function(){
+        if(typing()) return;
+        fitToScreen();
+        if(window.scrollY || document.documentElement.scrollTop) window.scrollTo(0, 0);
+      }, ms);
+    });
+  }
+  document.addEventListener("focusout", afterKeyboard);
+  if(window.visualViewport) window.visualViewport.addEventListener("resize", function(){ if(!typing()) fitToScreen(); });
+  document.addEventListener("visibilitychange", function(){ if(!document.hidden) setTimeout(fitToScreen, 100); });
+  window.addEventListener("pageshow", function(){ setTimeout(fitToScreen, 100); });
 })();
 
 (function(){
