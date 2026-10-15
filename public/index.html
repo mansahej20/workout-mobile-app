@@ -741,8 +741,10 @@
   }
   #auth-screen.show{ display:flex; }
   .auth-box{ width:100%; max-width:340px; }
-  .auth-title{ font-size:28px; font-weight:700; margin:0 0 6px; letter-spacing:-0.4px; }
-  .auth-title .brand{ flex:none; align-self:auto; font-size:inherit; letter-spacing:inherit; }
+  .auth-title{ font-size:28px; font-weight:700; margin:0 0 14px; letter-spacing:-0.4px; }
+  .auth-lockup{ display:inline-flex; align-items:center; gap:14px; }
+  .auth-mark{ width:58px; height:auto; color:var(--accent); flex:0 0 auto; overflow:visible; }
+  .auth-word{ color:var(--text); text-transform:uppercase; letter-spacing:0.12em; font-size:26px; line-height:1; }
   .auth-sub{ color:var(--text-dim); font-size:14px; margin:0 0 28px; }
   .auth-box label{ display:block; font-size:12px; font-weight:700; color:var(--text-dim); margin:0 0 6px; }
   .auth-box input{
@@ -1366,7 +1368,7 @@
 </script>
 <div id="auth-screen">
   <form class="auth-box" id="auth-form">
-    <h1 class="auth-title"><span class="brand brand-lg" role="img" aria-label="Repped"><svg class="barbell-arc" viewBox="0 0 92 14" preserveAspectRatio="none" aria-hidden="true"><path d="M3.04 12.36 L11 10.4 Q46 1.8 81 10.4 L88.96 12.36" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><g fill="currentColor"><rect x="5.08" y="6.40" width="2.9" height="10.2" rx="0.7" transform="rotate(-13.80 6.53 11.50)"/><rect x="8.44" y="7.13" width="2.4" height="7.2" rx="0.7" transform="rotate(-13.80 9.64 10.73)"/><rect x="84.02" y="6.40" width="2.9" height="10.2" rx="0.7" transform="rotate(13.80 85.47 11.50)"/><rect x="81.16" y="7.13" width="2.4" height="7.2" rx="0.7" transform="rotate(13.80 82.36 10.73)"/></g></svg><span class="brand-word">Repped</span></span></h1>
+    <h1 class="auth-title"><span class="auth-lockup" role="img" aria-label="Repped"><svg class="auth-mark" viewBox="300 342 654 530" aria-hidden="true"><g fill="currentColor"><path d="M381 362 H720 C792 362 850 414 858 485 H822 Q795 485 795 512 V595 C775 615 748 627 717 627 H466 V562 H687 C717 562 741 538 741 507.5 C741 477 717 453 687 453 H381 Z"/><path d="M552 656 H704 L862 853 H715 Z"/><rect x="381" y="733" width="120" height="120"/><rect x="320" y="528" width="44" height="144" rx="7"/><rect x="381" y="489" width="63" height="221" rx="7"/><rect x="817" y="509" width="56" height="201" rx="7"/><rect x="890" y="528" width="44" height="144" rx="7"/></g></svg><span class="auth-word">Repped</span></span></h1>
     <p class="auth-sub">Sign in to your account. No account yet? Ask the app owner to add you.</p>
     <label for="auth-email">Email</label>
     <input id="auth-email" type="email" autocomplete="email" autocapitalize="none" autocorrect="off" required />
