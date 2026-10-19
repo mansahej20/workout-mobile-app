@@ -444,6 +444,7 @@
   .section-label:first-child{ margin-top:0; }
 
   /* ---------- Progress tab ---------- */
+  .hconv{ font-size:12px; font-weight:600; color:var(--text-faint); margin-right:8px; }
   .select-wrap{ margin-bottom:16px; }
   select#exercise-select{
     width:100%;
@@ -3292,8 +3293,8 @@
         if(max > 0) entries.push({ date: d.date, raw: max, unit: unit, reps: repsAtMax });
       }
     });
-    /* Chart everything in the unit you used most recently for this exercise. */
-    var displayUnit = entries.length ? entries[entries.length-1].unit : preferredUnit(selectedProgressKey);
+    /* Progress is always shown in kg, whatever unit each day was logged in. */
+    var displayUnit = "kg";
     var points = entries.map(function(e){
       return { date: e.date, weight: roundWeight(convertWeight(e.raw, e.unit, displayUnit)), raw: e.raw, unit: e.unit, reps: e.reps };
     });
@@ -3335,7 +3336,8 @@
     if(!points.length){ el.innerHTML = ""; return; }
     var rev = points.slice().reverse();
     el.innerHTML = '<div class="card">' + rev.map(function(p){
-      return '<div class="history-row"><span class="hdate">' + formatShort(p.date) + '</span><span class="hval">' + roundWeight(p.raw) + ' ' + p.unit + ' &times; ' + esc(p.reps || "?") + '</span></div>';
+      var orig = p.unit === "lbs" ? '<span class="hconv">' + roundWeight(p.raw) + ' lbs</span>' : '';
+      return '<div class="history-row"><span class="hdate">' + formatShort(p.date) + '</span><span class="hval">' + orig + p.weight + ' kg &times; ' + esc(p.reps || "?") + '</span></div>';
     }).join("") + '</div>';
   }
 
