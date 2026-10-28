@@ -3102,14 +3102,51 @@
     });
     return exList;
   }
+  /* Progress dropdown, grouped by body part. Library exercises use their library group;
+     exercises you typed are sorted by words in the name ("leg curl" is Legs, "curl" is Biceps). */
+  var BODY_PARTS = ["Chest", "Back", "Shoulders", "Biceps", "Triceps", "Legs", "Core", "Other"];
+  var BODY_RULES = [
+    ["Core", /\b(crunch|plank|abs?|sit ?ups?|leg raises?|knee raises?|russian twist|wood ?chop|hollow|dead ?bug|pallof|rollout|ab wheel|oblique|v ?ups?|toes to bar|mountain climbers?)\b/],
+    ["Triceps", /\b(triceps?|pushdowns?|push ?downs?|skull ?crushers?|kickbacks?|french press|jm press)\b/],
+    ["Legs", /\b(squats?|legs?|lunges?|calf|calves|deadlifts?|rdl|hip thrusts?|glutes?|hamstrings?|quads?|step ?ups?|adductors?|abductors?|hack|good mornings?|sled|box jumps?|nordic)\b/],
+    ["Biceps", /\b(curls?|biceps?|hammer|preacher|chin ?ups?)\b/],
+    ["Shoulders", /\b(shoulders?|lateral|laterals|delts?|rear delt|reverse fly|reverse flye|face ?pulls?|overhead press|ohp|military|arnold|upright rows?|landmine press|y raises?|front raises?)\b/],
+    ["Back", /\b(rows?|pull ?downs?|pulldowns?|pull ?ups?|lats?|shrugs?|back extensions?|hyperextensions?|pullovers?|rack pulls?|t bar)\b/],
+    ["Chest", /\b(bench|chest|fly|flyes?|flies|push ?ups?|pecs?|incline|decline|dips?|crossovers?|press)\b/]
+  ];
+  var LIB_GROUP = null;
+  function bodyPartFor(ex){
+    if(!LIB_GROUP){
+      LIB_GROUP = {};
+      EXERCISE_LIBRARY.forEach(function(g){ g.items.forEach(function(it){ LIB_GROUP[it.key] = g.group; LIB_GROUP["n:" + looseName(it.name)] = g.group; }); });
+    }
+    var hit = LIB_GROUP[ex.key] || LIB_GROUP["n:" + looseName(ex.name)];
+    if(hit) return hit;
+    var name = String(ex.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ");
+    for(var i=0;i<BODY_RULES.length;i++){ if(BODY_RULES[i][1].test(name)) return BODY_RULES[i][0]; }
+    return "Other";
+  }
+  function groupByBodyPart(list){
+    var by = {};
+    list.forEach(function(ex){ var g = bodyPartFor(ex); (by[g] = by[g] || []).push(ex); });
+    return BODY_PARTS.filter(function(g){ return by[g]; }).map(function(g){
+      return { group: g, items: by[g].sort(function(a, b){ return String(a.name).localeCompare(String(b.name)); }) };
+    });
+  }
+  function progressOptionsHtml(list){
+    return groupByBodyPart(list).map(function(g){
+      return '<optgroup label="' + g.group + '">' + g.items.map(function(ex){
+        return '<option value="' + esc(ex.key) + '"' + (ex.key === selectedProgressKey ? ' selected' : '') + '>' + esc(ex.name) + '</option>';
+      }).join("") + '</optgroup>';
+    }).join("");
+  }
   function renderProgress(){
     var exList = progressExercises();
     if(!exList.some(function(x){ return x.key === selectedProgressKey; })){
-      selectedProgressKey = exList.length ? exList[0].key : null;
+      var first = groupByBodyPart(exList)[0];
+      selectedProgressKey = first ? first.items[0].key : null;
     }
-    var options = exList.map(function(ex){
-      return '<option value="' + ex.key + '"' + (ex.key===selectedProgressKey ? ' selected' : '') + '>' + esc(ex.name) + '</option>';
-    }).join("");
+    var options = progressOptionsHtml(exList);
     var html = '<div class="tab-panel">';
     html += '<div class="select-wrap"><select id="exercise-select">' + options + '</select></div>';
     if(exList.length > 1) html += '<button class="text-btn merge-btn" id="merge-open">Same exercise saved twice? Merge</button>';
@@ -3274,11 +3311,10 @@
     var docs = await store.queryRecent(30);
     var sel = document.getElementById("exercise-select");
     harvestLogExercises(docs);
-    Object.keys(extraExercises).forEach(function(k){
-      if(sel && !sel.querySelector('option[value="' + k + '"]')){
-        var o = document.createElement("option"); o.value = k; o.textContent = extraExercises[k]; sel.appendChild(o);
-      }
-    });
+    if(sel){
+      var list = progressExercises();
+      if(list.some(function(x){ return !sel.querySelector('option[value="' + x.key + '"]'); })) sel.innerHTML = progressOptionsHtml(list);
+    }
     var asc = docs.filter(Boolean).slice().sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
     var entries = [];
     asc.forEach(function(d){
