@@ -444,6 +444,16 @@
   .section-label:first-child{ margin-top:0; }
 
   /* ---------- Progress tab ---------- */
+  .bp-chips{ display:flex; flex-wrap:wrap; gap:8px; margin:4px 0 8px; }
+  .bp-chip{
+    min-height:40px; padding:0 16px; border:0; border-radius:999px;
+    background:var(--surface-3, #2a2a2a); color:var(--text); font:inherit; font-size:14px; font-weight:600;
+    transition:transform 120ms var(--ease-out), background 150ms;
+  }
+  .bp-chip:active{ transform:scale(0.95); background:var(--accent); color:#0b1a10; }
+  .bp-card{ margin-bottom:12px; box-shadow:inset 0 0 0 1px rgba(30,215,96,0.35); }
+  .bp-card-title{ font-size:15px; font-weight:700; }
+  .bp-card-sub{ font-size:13px; color:var(--text-dim); margin:2px 0 10px; }
   .hconv{ font-size:12px; font-weight:600; color:var(--text-faint); margin-right:8px; }
   .select-wrap{ margin-bottom:16px; }
   select#exercise-select{
@@ -1596,6 +1606,9 @@
     SETTINGS_PENDING_KEY = ns + "pendingSettings";
     AVATAR_KEY = ns + "avatar";
     AVATAR_PENDING_KEY = ns + "pendingAvatar";
+    BP_KEY = ns + "bodyParts";
+    BP_PENDING_KEY = ns + "pendingBodyParts";
+    BP_ASKED_KEY = ns + "bodyPartsAsked";
   }
   function hasUnsynced(){
     return pendingGet().length > 0 || planQueueGet().length > 0 || settingsPending();
@@ -1613,6 +1626,12 @@
   var PLAN_QUEUE_KEY = "setlog:pendingPlans";
   var SETTINGS_PENDING_KEY = "setlog:pendingSettings";
   var AVATAR_KEY = "setlog:avatar", AVATAR_PENDING_KEY = "setlog:pendingAvatar";
+  /* Body parts you picked for exercises the app couldn't sort: { exerciseKey: "Legs" }.
+     Cached on the phone and synced to user_settings.body_parts. */
+  var BP_KEY = "setlog:bodyParts", BP_PENDING_KEY = "setlog:pendingBodyParts", BP_ASKED_KEY = "setlog:bodyPartsAsked";
+  function bodyPartPicks(){ return readJSON(BP_KEY, {}) || {}; }
+  function bpPending(){ try{ return localStorage.getItem(BP_PENDING_KEY) === "1"; }catch(e){ return false; } }
+  function setBpPending(v){ try{ if(v) localStorage.setItem(BP_PENDING_KEY, "1"); else localStorage.removeItem(BP_PENDING_KEY); }catch(e){} }
   /* Profile photo: a small JPEG data URL, cached on the phone and synced to user_settings.avatar. */
   var currentAvatar = null;
   function localAvatar(){ try{ return localStorage.getItem(AVATAR_KEY) || null; }catch(e){ return null; } }
@@ -1725,6 +1744,16 @@
       try{
         if(avatarPending()){ await pushAvatar(); setAvatarPending(false); }
       }catch(e){ /* kept on this phone; retried later */ }
+      try{
+        if(bpPending()){
+          var bres = await client.from("user_settings").upsert(
+            { user_id: userId, body_parts: bodyPartPicks(), updated_at: new Date().toISOString() },
+            { onConflict: "user_id" }
+          );
+          if(bres.error) throw bres.error;
+          setBpPending(false);
+        }
+      }catch(e){ /* kept on this phone; retried later */ }
       finally{
         flushing = false;
       }
@@ -1808,6 +1837,23 @@
         var all = readJSON(PLANS_CACHE_KEY, []).filter(function(x){ return x.id !== id; });
         writeJSON(PLANS_CACHE_KEY, all);
         enqueuePlan({ op:"delete", id: id });
+        await flushPending();
+      },
+      async getBodyParts(){
+        if(bpPending()) return bodyPartPicks();
+        try{
+          var res = await client.from("user_settings").select("body_parts").eq("user_id", userId).maybeSingle();
+          if(res.error) throw res.error;
+          var v = (res.data && res.data.body_parts) || {};
+          writeJSON(BP_KEY, v);
+          return v;
+        }catch(e){
+          return bodyPartPicks();
+        }
+      },
+      async saveBodyParts(map){
+        writeJSON(BP_KEY, map);
+        setBpPending(true);
         await flushPending();
       },
       async getAvatar(){
@@ -2448,6 +2494,7 @@
     var card = content.querySelector('[data-ex-card="' + key + '"]');
     if(card) card.scrollIntoView({ block:"center", behavior:"smooth" });
     showToast("Added " + name);
+    setTimeout(function(){ askBodyParts([item]); }, 500);
   }
   function removeExtra(key){
     var ex = currentDayPlan.exercises.filter(function(e){ return e.key === key; })[0];
@@ -2809,6 +2856,7 @@
     swapOpen = null;
     scheduleSave();
     render();
+    if(fresh.origKey) setTimeout(function(){ askBodyParts([fresh]); }, 500);
   }
 
   function renderToday(){
@@ -3116,6 +3164,16 @@
   ];
   var LIB_GROUP = null;
   function bodyPartFor(ex){
+    var pick = bodyPartPicks()[ex.key];
+    if(pick && BODY_PARTS.indexOf(pick) !== -1) return pick;
+    return guessBodyPart(ex);
+  }
+  /* True when neither the library, the name, nor an earlier answer places it. */
+  function needsBodyPart(ex){
+    if(!ex || !ex.key || !String(ex.name || "").trim()) return false;
+    return !bodyPartPicks()[ex.key] && guessBodyPart(ex) === "Other";
+  }
+  function guessBodyPart(ex){
     if(!LIB_GROUP){
       LIB_GROUP = {};
       EXERCISE_LIBRARY.forEach(function(g){ g.items.forEach(function(it){ LIB_GROUP[it.key] = g.group; LIB_GROUP["n:" + looseName(it.name)] = g.group; }); });
@@ -3140,6 +3198,77 @@
       }).join("") + '</optgroup>';
     }).join("");
   }
+  /* ---------------- Asking for a body part ---------------- */
+  var bpSheet = null, bpQueue = [], bpCurrent = null;
+  function askedBefore(){ return readJSON(BP_ASKED_KEY, {}) || {}; }
+  function markAsked(key){ var a = askedBefore(); a[key] = 1; writeJSON(BP_ASKED_KEY, a); }
+  /* Queue a question for each exercise the app can't place (asked once per exercise;
+     anything skipped stays as a card on Progress). */
+  function askBodyParts(list){
+    var asked = askedBefore();
+    (list || []).forEach(function(ex){
+      if(needsBodyPart(ex) && !asked[ex.key] && !bpQueue.some(function(q){ return q.key === ex.key; }) && !(bpCurrent && bpCurrent.key === ex.key)){
+        bpQueue.push({ key: ex.key, name: ex.name });
+      }
+    });
+    if(!bpCurrent) nextBodyPartQuestion();
+  }
+  function bodyPartChipsHtml(attr){
+    return '<div class="bp-chips">' + BODY_PARTS.map(function(g){
+      return '<button type="button" class="bp-chip" ' + attr + '="' + g + '">' + g + '</button>';
+    }).join("") + '</div>';
+  }
+  function nextBodyPartQuestion(){
+    bpCurrent = bpQueue.shift() || null;
+    if(!bpCurrent){ if(bpSheet) bpSheet.classList.remove("show"); return; }
+    if(!bpSheet){
+      bpSheet = document.createElement("div");
+      bpSheet.className = "sheet-backdrop";
+      bpSheet.setAttribute("role", "dialog");
+      bpSheet.setAttribute("aria-modal", "true");
+      bpSheet.setAttribute("aria-labelledby", "bp-title");
+      document.body.appendChild(bpSheet);
+      bpSheet.addEventListener("click", function(e){
+        if(!bpCurrent) return;
+        var b = e.target.closest("[data-bp-pick]");
+        if(b){ var cur = bpCurrent; markAsked(cur.key); setBodyPart(cur.key, b.dataset.bpPick); nextBodyPartQuestion(); return; }
+        if(e.target === bpSheet || e.target.closest("[data-bp-later]")){ markAsked(bpCurrent.key); nextBodyPartQuestion(); }
+      });
+    }
+    var tst = document.getElementById("toast");
+    if(tst){ clearTimeout(toastTimer); tst.classList.remove("show"); }
+    var left = bpQueue.length;
+    bpSheet.innerHTML = '<div class="sheet"><div class="sheet-title" id="bp-title">Which body part is ' + esc(bpCurrent.name) + '?</div>' +
+      '<p class="sheet-text">So it shows in the right group on Progress.' + (left ? ' ' + left + ' more after this.' : '') + '</p>' +
+      bodyPartChipsHtml("data-bp-pick") +
+      '<button class="text-btn sheet-btn" data-bp-later>Not now</button></div>';
+    requestAnimationFrame(function(){ bpSheet.classList.add("show"); });
+  }
+  function setBodyPart(key, group){
+    var map = bodyPartPicks();
+    map[key] = group;
+    store.saveBodyParts(map);
+    if(activeTab === "progress") renderProgress();
+    showToast("Saved under " + group);
+  }
+  /* Progress: a small card for anything still unsorted, one at a time. */
+  function unsortedCardHtml(list){
+    var todo = list.filter(needsBodyPart);
+    if(!todo.length) return "";
+    var ex = todo[0];
+    return '<div class="card bp-card" data-bp-key="' + esc(ex.key) + '"><div class="bp-card-title">Which body part is ' + esc(ex.name) + '?</div>' +
+      '<div class="bp-card-sub">' + (todo.length > 1 ? todo.length + ' exercises aren\'t sorted yet.' : 'It\'s under Other until you choose.') + '</div>' +
+      bodyPartChipsHtml("data-bp-card-pick") + '</div>';
+  }
+  content.addEventListener("click", function(e){
+    if(activeTab !== "progress") return;
+    var b = e.target.closest("[data-bp-card-pick]");
+    if(!b) return;
+    var key = b.closest("[data-bp-key]").dataset.bpKey;
+    markAsked(key);
+    setBodyPart(key, b.dataset.bpCardPick);
+  });
+
   function renderProgress(){
     var exList = progressExercises();
     if(!exList.some(function(x){ return x.key === selectedProgressKey; })){
@@ -3148,6 +3277,7 @@
     }
     var options = progressOptionsHtml(exList);
     var html = '<div class="tab-panel">';
+    html += unsortedCardHtml(exList);
     html += '<div class="select-wrap"><select id="exercise-select">' + options + '</select></div>';
     if(exList.length > 1) html += '<button class="text-btn merge-btn" id="merge-open">Same exercise saved twice? Merge</button>';
     html += '<div class="chart-card" id="chart-card"><div class="chart-empty">Loading…</div></div>';
@@ -3289,6 +3419,8 @@
     if(draft) remapPlanDays(draft.data.days, from, to, toName);
     var prefs = unitPrefs();
     if(prefs[from] && !prefs[to]){ prefs[to] = prefs[from]; writeJSON(cacheNs + "units", prefs); }
+    var bpm = bodyPartPicks();
+    if(bpm[from]){ if(!bpm[to]) bpm[to] = bpm[from]; delete bpm[from]; store.saveBodyParts(bpm); }
     delete extraExercises[from];
     if(!extraExercises[to] && !allExercises().some(function(x){ return x.key === to; })) extraExercises[to] = toName;
     selectedProgressKey = to;
@@ -3313,7 +3445,12 @@
     harvestLogExercises(docs);
     if(sel){
       var list = progressExercises();
-      if(list.some(function(x){ return !sel.querySelector('option[value="' + x.key + '"]'); })) sel.innerHTML = progressOptionsHtml(list);
+      if(list.some(function(x){ return !sel.querySelector('option[value="' + x.key + '"]'); })){
+        sel.innerHTML = progressOptionsHtml(list);
+        var oldCard = content.querySelector(".bp-card"), cardHtml = unsortedCardHtml(list);
+        if(oldCard) oldCard.remove();
+        if(cardHtml) sel.closest(".select-wrap").insertAdjacentHTML("beforebegin", cardHtml);
+      }
     }
     var asc = docs.filter(Boolean).slice().sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
     var entries = [];
@@ -3642,6 +3779,9 @@
     draftIsNew = false;
     setDirty(false);
     showToast("Plan saved");
+    var savedEx = [];
+    DAY_ORDER.forEach(function(d){ normaliseDay(saved.data.days[d]).exercises.forEach(function(x){ savedEx.push(x); }); });
+    setTimeout(function(){ askBodyParts(savedEx); }, 600);
     await store.savePlan(saved);
     if(!planById(activePlanId)){
       /* First plan you make becomes the active one. */
@@ -4976,6 +5116,7 @@
     updateSyncDot();
     currentAvatar = localAvatar();
     updateHeaderAvatar();
+    store.getBodyParts().then(function(){ if(activeTab === "progress") renderProgress(); });
     var shownAvatar = currentAvatar;
     store.getAvatar().then(function(v){
       if(v === shownAvatar) return;

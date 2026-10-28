@@ -54,7 +54,9 @@ create table if not exists public.user_settings (
   user_id         uuid primary key references auth.users (id) on delete cascade default auth.uid(),
   active_plan_id  uuid references public.workout_plans (id) on delete set null,
   avatar          text,  -- profile photo as a small JPEG data URL (see 004_avatar.sql)
+  body_parts      jsonb not null default '{}'::jsonb,  -- { exerciseKey: "Legs" } picked by the user (see 005_body_parts.sql)
   updated_at      timestamptz not null default now(),
+  constraint user_settings_body_parts_check check (jsonb_typeof(body_parts) = 'object' and pg_column_size(body_parts) < 50000),
   constraint user_settings_avatar_size check (avatar is null or (length(avatar) < 300000 and avatar like 'data:image/%'))
 );
 
