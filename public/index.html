@@ -450,6 +450,11 @@
     background:var(--surface-3, #2a2a2a); color:var(--text); font:inherit; font-size:14px; font-weight:600;
     transition:transform 120ms var(--ease-out), background 150ms;
   }
+  .bp-chip[aria-pressed="true"]{ background:var(--accent); color:#0b1a10; }
+  .progress-tools{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin:-4px 0 12px; }
+  .progress-tools .merge-btn{ margin:0 0 0 auto; }
+  .bp-change{ font-size:12px; color:var(--text-dim); padding-left:4px; }
+  .bp-now{ color:var(--accent); }
   .bp-chip:active{ transform:scale(0.95); background:var(--accent); color:#0b1a10; }
   .bp-card{ margin-bottom:12px; box-shadow:inset 0 0 0 1px rgba(30,215,96,0.35); }
   .bp-card-title{ font-size:15px; font-weight:700; }
@@ -3158,7 +3163,7 @@
     ["Triceps", /\b(triceps?|pushdowns?|push ?downs?|skull ?crushers?|kickbacks?|french press|jm press)\b/],
     ["Legs", /\b(squats?|legs?|lunges?|calf|calves|deadlifts?|rdl|hip thrusts?|glutes?|hamstrings?|quads?|step ?ups?|adductors?|abductors?|hack|good mornings?|sled|box jumps?|nordic)\b/],
     ["Biceps", /\b(curls?|biceps?|hammer|preacher|chin ?ups?)\b/],
-    ["Shoulders", /\b(shoulders?|lateral|laterals|delts?|rear delt|reverse fly|reverse flye|face ?pulls?|overhead press|ohp|military|arnold|upright rows?|landmine press|y raises?|front raises?)\b/],
+    ["Shoulders", /\b(shoulders?|lateral|laterals|delts?|rear delt|reverse fly|reverse flye|face ?pulls?|overhead press|ohp|military|arnold|up ?right rows?|landmine press|y raises?|front raises?)\b/],
     ["Back", /\b(rows?|pull ?downs?|pulldowns?|pull ?ups?|lats?|shrugs?|back extensions?|hyperextensions?|pullovers?|rack pulls?|t bar)\b/],
     ["Chest", /\b(bench|chest|fly|flyes?|flies|push ?ups?|pecs?|incline|decline|dips?|crossovers?|press)\b/]
   ];
@@ -3251,6 +3256,38 @@
     if(activeTab === "progress") renderProgress();
     showToast("Saved under " + group);
   }
+  /* Progress: change the body part of the selected exercise (overrides the app's guess). */
+  var bpChangeSheet = null;
+  function openBodyPartChange(key){
+    if(!key) return;
+    var name = nameOfKey(key), cur = bodyPartFor({ key: key, name: name });
+    if(!bpChangeSheet){
+      bpChangeSheet = document.createElement("div");
+      bpChangeSheet.className = "sheet-backdrop";
+      bpChangeSheet.setAttribute("role", "dialog");
+      bpChangeSheet.setAttribute("aria-modal", "true");
+      bpChangeSheet.setAttribute("aria-labelledby", "bpc-title");
+      document.body.appendChild(bpChangeSheet);
+      bpChangeSheet.addEventListener("click", function(e){
+        var b = e.target.closest("[data-bpc-pick]");
+        if(b){
+          var k = bpChangeSheet.dataset.key;
+          bpChangeSheet.classList.remove("show");
+          markAsked(k);
+          setBodyPart(k, b.dataset.bpcPick);
+          return;
+        }
+        if(e.target === bpChangeSheet || e.target.closest("[data-bpc-close]")) bpChangeSheet.classList.remove("show");
+      });
+    }
+    bpChangeSheet.dataset.key = key;
+    bpChangeSheet.innerHTML = '<div class="sheet"><div class="sheet-title" id="bpc-title">Body part for ' + esc(name) + '</div>' +
+      '<p class="sheet-text">Moves it to that group on Progress. Your history stays the same.</p>' +
+      bodyPartChipsHtml("data-bpc-pick").replace('data-bpc-pick="' + cur + '"', 'data-bpc-pick="' + cur + '" aria-pressed="true"') +
+      '<button class="text-btn sheet-btn" data-bpc-close>Cancel</button></div>';
+    requestAnimationFrame(function(){ bpChangeSheet.classList.add("show"); });
+  }
+
   /* Progress: a small card for anything still unsorted, one at a time. */
   function unsortedCardHtml(list){
     var todo = list.filter(needsBodyPart);
@@ -3279,16 +3316,23 @@
     var html = '<div class="tab-panel">';
     html += unsortedCardHtml(exList);
     html += '<div class="select-wrap"><select id="exercise-select">' + options + '</select></div>';
-    if(exList.length > 1) html += '<button class="text-btn merge-btn" id="merge-open">Same exercise saved twice? Merge</button>';
+    html += '<div class="progress-tools">';
+    if(selectedProgressKey) html += '<button class="text-btn bp-change" id="bp-change"><span class="bp-now">' + esc(bodyPartFor({ key: selectedProgressKey, name: nameOfKey(selectedProgressKey) })) + '</span> &middot; Change</button>';
+    if(exList.length > 1) html += '<button class="text-btn merge-btn" id="merge-open">Saved twice? Merge</button>';
+    html += '</div>';
     html += '<div class="chart-card" id="chart-card"><div class="chart-empty">Loading…</div></div>';
     html += '<div id="history-list"></div>';
     html += '</div>';
     content.innerHTML = html;
 
+    var bpBtn = document.getElementById("bp-change");
+    if(bpBtn) bpBtn.addEventListener("click", function(){ openBodyPartChange(selectedProgressKey); });
     var mergeBtn = document.getElementById("merge-open");
     if(mergeBtn) mergeBtn.addEventListener("click", function(){ openMergeSheet(selectedProgressKey); });
     document.getElementById("exercise-select").addEventListener("change", function(e){
       selectedProgressKey = e.target.value;
+      var now = content.querySelector(".bp-now");
+      if(now) now.textContent = bodyPartFor({ key: selectedProgressKey, name: nameOfKey(selectedProgressKey) });
       loadProgressData();
     });
 
